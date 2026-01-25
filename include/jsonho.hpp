@@ -100,6 +100,8 @@ protected:
     DT _value;
 };
 
+template <typename DT>
+struct __dt_2_jt { typedef DT type; };
 class Json final : public Primary<Type::JSON, std::shared_ptr<Interface>> {
 public:
     using Interface::dumps;
@@ -119,13 +121,13 @@ public:
     }
     const char *loads(const char *psz) override;
     template <typename T>
-    std::shared_ptr<T> as() {
-        static_assert(std::is_base_of<Interface, T>::value,
-            "Json::as<T>() : T should inherit from Interface");
+    std::shared_ptr<typename __dt_2_jt<T>::type> as() {
+        static_assert(std::is_base_of<Interface, typename __dt_2_jt<T>::type>::value,
+            "Json::as<T>() : not supported type");
         return nullptr;
     }
     template <typename T>
-    std::shared_ptr<T> to();
+    std::shared_ptr<typename __dt_2_jt<T>::type> to();
 }; // Json
 
 class Str final : public Primary<Type::STR, std::string> {
@@ -313,29 +315,20 @@ public:
         }
         return psz;
     }
-    template <typename T>
-    std::shared_ptr<T> get(const std::string &k, std::shared_ptr<T> default_value = nullptr) {
+    Json &get(const std::string &k, Json default_value = Json()) {
 #define DICT_GET()                \
         auto it = _value.find(k); \
         if (it == _value.end()) { \
             return default_value; \
         }                         \
-        return it->second.as<T>();
+        return it->second;
         DICT_GET()
     }
     template <typename T>
-    std::shared_ptr<const T> get(const std::string &k, std::shared_ptr<T> default_value = nullptr) const {
+    const Json &get(const std::string &k, Json default_value = Json()) const {
         DICT_GET()
     }
 #undef DICT_GET
-    Dict &insert(std::string k, Json v) {
-        _value.insert(std::make_pair(std::move(k), std::move(v)));
-        return *this;
-    }
-    Dict &erase(const std::string &k) {
-        _value.erase(k);
-        return *this;
-    }
 }; // Dict
 
 class List final : public Primary<Type::LIST, std::list<Json>> {
@@ -404,7 +397,7 @@ Json &Json::operator = (std::remove_const<JT>::type v) { \
     _value = std::make_shared<JT>(std::move(v));         \
     return *this;                                        \
 }                                                                    \
-template <> std::shared_ptr<JT> Json::as<JT>() {                     \
+template <> std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>() {                     \
     if (!_value || _value->type() != JT::TYPE()) {                   \
         return nullptr;                                              \
     }                                                                \
@@ -417,6 +410,35 @@ CASE_JSON_TYPE(Bool)
 CASE_JSON_TYPE(Dict)
 CASE_JSON_TYPE(List)
 #undef CASE_JSON_TYPE
+
+#define CASE_DATA_TYPE(JT, DT)                      \
+template <> Json::Json(DT v)                        \
+    : Primary(std::make_shared<JT>(std::move(v))) { \
+}                                                                    \
+template <> struct __dt_2_jt<DT> { typedef JT type; };               \
+template <> std::shared_ptr<JT> Json::as<DT>() {                     \
+    if (!_value || _value->type() != JT::TYPE()) {                   \
+        return nullptr;                                              \
+    }                                                                \
+    return std::static_pointer_cast<JT>(_value->shared_from_this()); \
+}
+CASE_DATA_TYPE(Str, std::string)
+CASE_DATA_TYPE(Str, const char *)
+CASE_DATA_TYPE(Float, long double)
+CASE_DATA_TYPE(Float, double)
+CASE_DATA_TYPE(Float, float)
+CASE_DATA_TYPE(Int, unsigned long long)
+CASE_DATA_TYPE(Int, unsigned long)
+CASE_DATA_TYPE(Int, unsigned int)
+CASE_DATA_TYPE(Int, unsigned short)
+CASE_DATA_TYPE(Int, long long)
+CASE_DATA_TYPE(Int, long)
+CASE_DATA_TYPE(Int, int)
+CASE_DATA_TYPE(Int, short)
+CASE_DATA_TYPE(Bool, bool)
+CASE_DATA_TYPE(Dict, Dict::value_t)
+CASE_DATA_TYPE(List, List::value_t)
+#undef CASE_JSON_DTYPE
 
 const char *Json::loads(const char *psz) {
 #define CASE_JSON_TYPE(JT) {             \
@@ -481,6 +503,19 @@ struct __json_to<Str, Tfrom> {
         return std::make_shared<Str>(v.dumps());
     }
 };
+template <typename Tfrom>
+struct __json_to<Bool, Tfrom> {
+    static std::shared_ptr<Bool> cast(const Tfrom &v) {
+        static_assert(std::is_base_of<Interface, Tfrom>::value,
+            "__json_to is only applicable to jonsho types");
+        auto data = std::make_shared<Bool>(true);
+        auto s = v.dumps();
+        if (s.empty() || s == "false" || s == "{}" || s == "[]") {
+            data->value() = false;
+        }
+        return data;
+    }
+};
 #define CASE_JSON_CAST_NUMBERIC(Tto, Tfrom)            \
 template <> struct __json_to<Tto, Tfrom> {             \
     static std::shared_ptr<Tto> cast(const Tfrom &v) { \
@@ -510,10 +545,11 @@ struct __json_to<Bool, Str> {
         return std::make_shared<Bool>(bv);
     }
 };
-template <typename JT> 
-std::shared_ptr<JT> Json::to() {
+template <typename DT> 
+std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to() {
+    typedef typename __dt_2_jt<DT>::type JT;
     static_assert(std::is_base_of<Interface, JT>::value,
-        "__json_to is only applicable to jonsho types");
+        "unsupported type");
     auto type_to = JT::TYPE();
     if (!_value || _value->type() == type_to) {
         return as<JT>();
@@ -542,28 +578,6 @@ std::shared_ptr<JT> Json::to() {
     }
     return as<JT>();
 }
-
-#define CASE_DATA_TYPE(JT, DT)                      \
-template <> Json::Json(DT v)                        \
-    : Primary(std::make_shared<JT>(std::move(v))) { \
-}
-CASE_DATA_TYPE(Str, std::string)
-CASE_DATA_TYPE(Str, const char *)
-CASE_DATA_TYPE(Float, long double)
-CASE_DATA_TYPE(Float, double)
-CASE_DATA_TYPE(Float, float)
-CASE_DATA_TYPE(Int, unsigned long long)
-CASE_DATA_TYPE(Int, unsigned long)
-CASE_DATA_TYPE(Int, unsigned int)
-CASE_DATA_TYPE(Int, unsigned short)
-CASE_DATA_TYPE(Int, long long)
-CASE_DATA_TYPE(Int, long)
-CASE_DATA_TYPE(Int, int)
-CASE_DATA_TYPE(Int, short)
-CASE_DATA_TYPE(Bool, bool)
-CASE_DATA_TYPE(Dict, Dict::value_t)
-CASE_DATA_TYPE(List, List::value_t)
-#undef CASE_JSON_DTYPE
 
 } // jsonho
 
