@@ -46,7 +46,7 @@ TEST_CASE("Dict") {
 
     SECTION("Json<Str>::to<Dict>() success") {
         CHECK(j.as<jsonho::Str>());
-        CHECK(j.as<jsonho::Str>()->value() == s);
+        CHECK(j.as<std::string>()->value() == s);
         auto p = j.to<jsonho::Dict>();
         CHECK(p);
         CHECK(p->get("name").as<std::string>()->value() == "json");
@@ -58,9 +58,9 @@ TEST_CASE("Dict") {
         CHECK(j.as<jsonho::Dict>());
         auto p = j.to<jsonho::Str>();
         CHECK(p);
-        CHECK(p->value() == "{\"addr\":2147483648,\"mode\":\"read-only\",\"size\":512}");
+        CHECK(p->value() == "{\"addr\":2147483648,\"size\":512,\"mode\":\"read-only\"}");
         CHECK(j.as<jsonho::Str>());
-        CHECK(j.as<jsonho::Str>() == p);
+        CHECK(j.as<std::string>() == p);
     }
 
     SECTION("Json<Dict>::to<Bool>() true") {
@@ -69,7 +69,7 @@ TEST_CASE("Dict") {
         CHECK(p);
         CHECK(p->value() == true);
         CHECK(j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Bool>() == p);
+        CHECK(j.as<bool>() == p);
     }
 
     j = jsonho::Dict();

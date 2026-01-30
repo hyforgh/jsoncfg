@@ -253,10 +253,70 @@ public:
     }
 }; // Bool
 
-class Dict final : public Primary<Type::DICT, std::map<std::string, Json>> {
+class ListDict {
+private:
+    typedef std::list<std::pair<std::string, Json>> list_t;
+    typedef std::map<std::string, list_t::iterator> dict_t;
+public:
+    typedef list_t::iterator  iterator;
+    typedef list_t::const_iterator const_iterator;
+public:
+    ListDict(std::initializer_list<std::pair<std::string, Json>> init) {
+        for (auto &it : init) {
+            auto itd = _dict.find(it.first);
+            if (itd != _dict.end()) {
+                itd->second->second = it.second;
+                continue;
+            }
+            _list.emplace_back(it.first, it.second);
+            _dict[it.first] = --_list.end();
+        }
+    }
+    Json &operator [] (const std::string &key) {
+        auto it = _dict.find(key);
+        if (it == _dict.end()) {
+            _list.emplace_back(key, Json());
+            _dict[key] = --_list.end();
+            return _list.rbegin()->second;
+        }
+        return it->second->second;
+    }
+    iterator begin() {
+        return _list.begin();
+    }
+    iterator end() {
+        return _list.end();
+    }
+    iterator find(const std::string &key) {
+        auto it = _dict.find(key);
+        if (it == _dict.end()) {
+            return _list.end();
+        }
+        return it->second;
+    }
+    const_iterator begin() const {
+        return _list.begin();
+    }
+    const_iterator end() const {
+        return _list.end();
+    }
+    const_iterator find(const std::string &key) const {
+        auto it = _dict.find(key);
+        if (it == _dict.end()) {
+            return _list.end();
+        }
+        return it->second;
+    }
+private:
+    list_t _list;
+    dict_t _dict;
+};
+class Dict final : public Primary<Type::DICT, ListDict> {
 public:
     using Interface::dumps;
     using Interface::loads;
+    typedef value_t::iterator iterator;
+    typedef value_t::const_iterator const_iterator;
 public:
     Dict() : Primary({}) {}
     Dict(value_t v) : Primary(std::move(v)) {}
@@ -315,20 +375,35 @@ public:
         }
         return psz;
     }
-    Json &get(const std::string &k, Json default_value = Json()) {
-#define DICT_GET()                \
-        auto it = _value.find(k); \
-        if (it == _value.end()) { \
-            return default_value; \
-        }                         \
+    Dict &set(std::string k, Json v) {
+        _value[k] = std::move(v);
+        return *this;
+    }
+    Json get(const std::string &k, Json default_value = Json()) {
+        auto it = _value.find(k);
+        if (it == _value.end()) {
+            return default_value;
+        }
         return it->second;
-        DICT_GET()
     }
-    template <typename T>
-    const Json &get(const std::string &k, Json default_value = Json()) const {
-        DICT_GET()
+    iterator begin() {
+        return _value.begin();
     }
-#undef DICT_GET
+    iterator end() {
+        return _value.end();
+    }
+    iterator find(const std::string &key) {
+        return _value.find(key);
+    }
+    const_iterator begin() const {
+        return _value.begin();
+    }
+    const_iterator end() const {
+        return _value.end();
+    }
+    const_iterator find(const std::string &key) const {
+        return _value.find(key);
+    }
 }; // Dict
 
 class List final : public Primary<Type::LIST, std::list<Json>> {
