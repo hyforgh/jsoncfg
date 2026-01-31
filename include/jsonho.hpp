@@ -35,6 +35,7 @@ SOFTWARE.
 #include <map>
 #include <sstream>
 #include <memory>
+#include <vector>
 
 namespace jsonho {
 
@@ -307,6 +308,10 @@ public:
         }
         return it->second;
     }
+    void clear() {
+        _list.clear();
+        _dict.clear();
+    }
 private:
     list_t _list;
     dict_t _dict;
@@ -335,6 +340,7 @@ public:
         os << "}";
     }
     const char *loads(const char *psz) {
+        _value.clear();
         if (!psz) {
             return psz;
         }
@@ -379,7 +385,7 @@ public:
         _value[k] = std::move(v);
         return *this;
     }
-    Json get(const std::string &k, Json default_value = Json()) {
+    Json get(const std::string &k, Json default_value = Json()) const {
         auto it = _value.find(k);
         if (it == _value.end()) {
             return default_value;
@@ -410,6 +416,10 @@ class List final : public Primary<Type::LIST, std::list<Json>> {
 public:
     using Interface::dumps;
     using Interface::loads;
+    typedef value_t::iterator iterator;
+    typedef value_t::const_iterator const_iterator;
+    typedef value_t::reverse_iterator reverse_iterator;
+    typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
     List() : Primary({}) {}
     List(value_t v) : Primary(std::move(v)) {}
@@ -427,6 +437,7 @@ public:
         os << "]";
     }
     const char *loads(const char *psz) {
+        _value.clear();
         if (!psz) {
             return psz;
         }
@@ -461,22 +472,103 @@ public:
         _value.emplace_back(std::move(v));
         return *this;
     }
+    List &insert(unsigned i, Json v) {
+        _value.emplace(iterator_at(i), std::move(v));
+        return *this;
+    }
+    Json &get(unsigned i) {
+        return *iterator_at(i);
+    }
+    const Json &get(unsigned i) const {
+        return *iterator_at(i);
+    }
+    List &set(unsigned i, Json v) {
+        auto it = iterator_at(i);
+        *it = std::move(v);
+        return *this;
+    }
+    std::vector<iterator> vector() {
+        std::vector<iterator> vec; vec.reserve(_value.size());
+        for (auto it = _value.begin(); it != _value.end(); ++it) {
+            vec.emplace_back(it);
+        }
+        return vec;
+    }
+    template<typename T>
+    std::vector<T> vector(const T &default_value) {
+        std::vector<T> vec; vec.reserve(_value.size());
+        for (auto &it : _value) {
+            auto v = it.as<T>();
+            if (v) {
+                vec.emplace_back(v->value());
+            } else {
+                vec.emplace_back(default_value);
+            }
+        }
+        return vec;
+    }
+    size_t size() const {
+        return _value.size();
+    }
+    iterator begin() {
+        return _value.begin();
+    }
+    iterator end() {
+        return _value.end();
+    }
+    const_iterator begin() const {
+        return _value.begin();
+    }
+    const_iterator end() const {
+        return _value.end();
+    }
+    reverse_iterator rbegin() {
+        return _value.rbegin();
+    }
+    reverse_iterator rend() {
+        return _value.rend();
+    }
+    const_reverse_iterator rbegin() const {
+        return _value.rbegin();
+    }
+    const_reverse_iterator rend() const {
+        return _value.rend();
+    }
+private:
+    iterator iterator_at(unsigned i) {
+#define ITERATOR_AT()                 \
+        if (i >= _value.size()) {     \
+            return _value.end();      \
+        }                             \
+        if (2 * i > _value.size()) {  \
+            auto it = --_value.end(); \
+            while (i--) --it;         \
+            return it;                \
+        }                             \
+        auto it = _value.begin();     \
+        while (i--) ++it;             \
+        return it;
+        ITERATOR_AT();
+    }
+    const_iterator iterator_at(unsigned i) const {
+        ITERATOR_AT();
+#undef ITERATOR_AT
+    }
 }; // List
 
 #define CASE_JSON_TYPE(JT)                          \
 template <> Json::Json(JT v)                        \
     : Primary(std::make_shared<JT>(std::move(v))) { \
 }                                                   \
-template <>                                              \
-Json &Json::operator = (std::remove_const<JT>::type v) { \
-    _value = std::make_shared<JT>(std::move(v));         \
-    return *this;                                        \
-}                                                                    \
-template <> std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>() {                     \
-    if (!_value || _value->type() != JT::TYPE()) {                   \
-        return nullptr;                                              \
-    }                                                                \
-    return std::static_pointer_cast<JT>(_value->shared_from_this()); \
+template <> Json &Json::operator = (std::remove_const<JT>::type v) { \
+    _value = std::make_shared<JT>(std::move(v));                     \
+    return *this;                                                    \
+}                                                                          \
+template <> std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>() { \
+    if (!_value || _value->type() != JT::TYPE()) {                         \
+        return nullptr;                                                    \
+    }                                                                      \
+    return std::static_pointer_cast<JT>(_value->shared_from_this());       \
 }
 CASE_JSON_TYPE(Str)
 CASE_JSON_TYPE(Float)
