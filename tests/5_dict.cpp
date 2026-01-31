@@ -23,6 +23,17 @@ TEST_CASE("Dict") {
         CHECK(v.get("str").as<jsonho::Str>()->value() == "world");
     }
 
+    SECTION("Dict::set()") {
+        CHECK(v.set("bool", false).get("bool").as<jsonho::Bool>()->value() == false);
+        CHECK(v.get("dict").as<jsonho::Dict>()->set("a", 100).get("a").as<jsonho::Int>()->value() == 100);
+        CHECK(v.set("float", 6.0).get("float").as<jsonho::Float>()->value() == Approx(6).margin(1e-6));
+        CHECK(v.set("int", 10).get("int").as<jsonho::Int>()->value() == 10);
+        CHECK(v.set("list", jsonho::List({1, 2, 3})).get("list").as<jsonho::List>()->vector<int>(0) == std::vector<int> {1, 2, 3});
+        CHECK(v.set("str", "json").get("str").as<std::string>()->value() == "json");
+        v.get("list").as<jsonho::List>()->get(1).as<int>()->value() = 5;
+        CHECK(v.dumps() == "{\"bool\":false,\"dict\":{\"a\":100},\"float\":6,\"int\":10,\"list\":[1,5,3],\"str\":\"json\"}");
+    }
+
     auto j = jsonho::Json();
     j.loads(v.dumps());
     SECTION("Json::loads(Dict)") {

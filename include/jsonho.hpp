@@ -547,17 +547,19 @@ public:
     }
 private:
     iterator iterator_at(unsigned i) {
-#define ITERATOR_AT()                 \
-        if (i >= _value.size()) {     \
-            return _value.end();      \
-        }                             \
-        if (2 * i > _value.size()) {  \
-            auto it = --_value.end(); \
-            while (i--) --it;         \
-            return it;                \
-        }                             \
-        auto it = _value.begin();     \
-        while (i--) ++it;             \
+#define ITERATOR_AT()               \
+        auto n = _value.size();     \
+        if (i >= n) {               \
+            return _value.end();    \
+        }                           \
+        if (2 * i > n) {            \
+            auto it = _value.end(); \
+            i = n - i;              \
+            while (i--) --it;       \
+            return it;              \
+        }                           \
+        auto it = _value.begin();   \
+        while (i--) ++it;           \
         return it;
         ITERATOR_AT();
     }
