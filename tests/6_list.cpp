@@ -10,12 +10,13 @@ TEST_CASE("List") {
 
     v.loads("[1.2,5,\"hello\",{\"world\":8,\"json\":9.1},[4,5,6]]");
     SECTION("List::loads({})") {
-        auto vec = v.vector();
-        CHECK(vec[0]->as<float>()->value() == Approx(1.2).margin(1e-6));
-        CHECK(vec[1]->as<int>()->value() == 5);
-        CHECK(vec[2]->as<std::string>()->value() == "hello");
-        CHECK(vec[3]->as<jsonho::Dict>()->get("world").as<int>()->value() == 8);
-        CHECK(vec[3]->as<jsonho::Dict>()->get("json").as<float>()->value() == Approx(9.1).margin(1e-6));
-        CHECK(vec[4]->as<jsonho::List>()->vector<int>(0) == std::vector<int> {4, 5, 6});
+        auto iters = v.iterators();
+        CHECK(iters[0]->as<float>()->value() == Approx(1.2).margin(1e-6));
+        CHECK(iters[1]->as<int>()->value() == 5);
+        CHECK(iters[2]->as<std::string>()->value() == "hello");
+        CHECK(iters[3]->as<jsonho::Dict>()->get("world").as<int>()->value() == 8);
+        CHECK(iters[3]->as<jsonho::Dict>()->get("json").as<float>()->value() == Approx(9.1).margin(1e-6));
+        CHECK(iters[4]->as<jsonho::List>()->vector<int>(0) == std::vector<int> {4, 5, 6});
+        CHECK(v.vector<std::string>("") == std::vector<std::string> {"1.2", "5", "hello", "{\"world\":8,\"json\":9.1}", "[4,5,6]"});
     }
 }

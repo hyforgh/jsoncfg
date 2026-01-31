@@ -123,12 +123,23 @@ public:
     const char *loads(const char *psz) override;
     template <typename T>
     std::shared_ptr<typename __dt_2_jt<T>::type> as() {
+        return as<T>(_value);
+    }
+    template <typename T>
+    std::shared_ptr<typename __dt_2_jt<T>::type> to() {
+        auto v = to<T>(_value);
+        _value = v;
+        return v;
+    }
+public:
+    template <typename T>
+    static std::shared_ptr<typename __dt_2_jt<T>::type> as(std::shared_ptr<Interface> v) {
         static_assert(std::is_base_of<Interface, typename __dt_2_jt<T>::type>::value,
             "Json::as<T>() : not supported type");
         return nullptr;
     }
     template <typename T>
-    std::shared_ptr<typename __dt_2_jt<T>::type> to();
+    static std::shared_ptr<typename __dt_2_jt<T>::type> to(std::shared_ptr<Interface> v);
 }; // Json
 
 class Str final : public Primary<Type::STR, std::string> {
@@ -487,7 +498,7 @@ public:
         *it = std::move(v);
         return *this;
     }
-    std::vector<iterator> vector() {
+    std::vector<iterator> iterators() {
         std::vector<iterator> vec; vec.reserve(_value.size());
         for (auto it = _value.begin(); it != _value.end(); ++it) {
             vec.emplace_back(it);
@@ -495,10 +506,10 @@ public:
         return vec;
     }
     template<typename T>
-    std::vector<T> vector(const T &default_value) {
+    std::vector<T> vector(const T &default_value) const {
         std::vector<T> vec; vec.reserve(_value.size());
         for (auto &it : _value) {
-            auto v = it.as<T>();
+            auto v = Json::to<T>(it.value());
             if (v) {
                 vec.emplace_back(v->value());
             } else {
@@ -563,12 +574,13 @@ template <> Json::Json(JT v)                        \
 template <> Json &Json::operator = (std::remove_const<JT>::type v) { \
     _value = std::make_shared<JT>(std::move(v));                     \
     return *this;                                                    \
-}                                                                          \
-template <> std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>() { \
-    if (!_value || _value->type() != JT::TYPE()) {                         \
-        return nullptr;                                                    \
-    }                                                                      \
-    return std::static_pointer_cast<JT>(_value->shared_from_this());       \
+}                                                                                          \
+template <>                                                                                \
+std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>(std::shared_ptr<Interface> v) { \
+    if (!v || v->type() != JT::TYPE()) {                                                   \
+        return nullptr;                                                                    \
+    }                                                                                      \
+    return std::static_pointer_cast<JT>(v->shared_from_this());                            \
 }
 CASE_JSON_TYPE(Str)
 CASE_JSON_TYPE(Float)
@@ -581,13 +593,14 @@ CASE_JSON_TYPE(List)
 #define CASE_DATA_TYPE(JT, DT)                      \
 template <> Json::Json(DT v)                        \
     : Primary(std::make_shared<JT>(std::move(v))) { \
-}                                                                    \
-template <> struct __dt_2_jt<DT> { typedef JT type; };               \
-template <> std::shared_ptr<JT> Json::as<DT>() {                     \
-    if (!_value || _value->type() != JT::TYPE()) {                   \
-        return nullptr;                                              \
-    }                                                                \
-    return std::static_pointer_cast<JT>(_value->shared_from_this()); \
+}                                                                \
+template <> struct __dt_2_jt<DT> { typedef JT type; };           \
+template <>                                                      \
+std::shared_ptr<JT> Json::as<DT>(std::shared_ptr<Interface> v) { \
+    if (!v || v->type() != JT::TYPE()) {                         \
+        return nullptr;                                          \
+    }                                                            \
+    return std::static_pointer_cast<JT>(v->shared_from_this());  \
 }
 CASE_DATA_TYPE(Str, std::string)
 CASE_DATA_TYPE(Str, const char *)
@@ -641,19 +654,19 @@ const char *Json::loads(const char *psz) {
 }
 
 template <typename Tto, typename Tfrom>
-struct __json_to {
+struct __cast {
     static std::shared_ptr<Tto> cast(const Tfrom &v) {
         static_assert(std::is_base_of<Interface, Tto>::value \
                 && std::is_base_of<Interface,  Tfrom>::value,
-            "__json_to is only applicable to jonsho types");
+            "jsonho::__cast is only applicable to jonsho types");
         return nullptr;
     }
 };
 template <typename Tto>
-struct __json_to<Tto, Str> {
+struct __cast<Tto, Str> {
     static std::shared_ptr<Tto> cast(const Str &v) {
         static_assert(std::is_base_of<Interface, Tto>::value,
-            "__json_to is only applicable to jonsho types");
+            "jsonho::__cast is only applicable to jonsho types");
         auto data = std::make_shared<Tto>();
         auto p = v.value().c_str();
         if (data->loads(p) != p) {
@@ -663,18 +676,18 @@ struct __json_to<Tto, Str> {
     }
 };
 template <typename Tfrom>
-struct __json_to<Str, Tfrom> {
+struct __cast<Str, Tfrom> {
     static std::shared_ptr<Str> cast(const Tfrom &v) {
         static_assert(std::is_base_of<Interface, Tfrom>::value,
-            "__json_to is only applicable to jonsho types");
+            "jsonho::__cast is only applicable to jonsho types");
         return std::make_shared<Str>(v.dumps());
     }
 };
 template <typename Tfrom>
-struct __json_to<Bool, Tfrom> {
+struct __cast<Bool, Tfrom> {
     static std::shared_ptr<Bool> cast(const Tfrom &v) {
         static_assert(std::is_base_of<Interface, Tfrom>::value,
-            "__json_to is only applicable to jonsho types");
+            "jsonho::__cast is only applicable to jonsho types");
         auto data = std::make_shared<Bool>(true);
         auto s = v.dumps();
         if (s.empty() || s == "false" || s == "{}" || s == "[]") {
@@ -684,7 +697,7 @@ struct __json_to<Bool, Tfrom> {
     }
 };
 #define CASE_JSON_CAST_NUMBERIC(Tto, Tfrom)            \
-template <> struct __json_to<Tto, Tfrom> {             \
+template <> struct __cast<Tto, Tfrom> {             \
     static std::shared_ptr<Tto> cast(const Tfrom &v) { \
         return std::make_shared<Tto>(v.value());       \
     }                                                  \
@@ -698,7 +711,7 @@ CASE_JSON_CAST_NUMBERIC(Bool, Float)
 CASE_JSON_CAST_NUMBERIC(Bool, Int)
 #undef CASE_JSON_CAST_NUMBERIC
 template <>
-struct __json_to<Bool, Str> {
+struct __cast<Bool, Str> {
     static std::shared_ptr<Bool> cast(const Str &v) {
         bool bv = true;
         auto vs = v.value();
@@ -713,37 +726,36 @@ struct __json_to<Bool, Str> {
     }
 };
 template <typename DT> 
-std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to() {
+std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface> v) {
     typedef typename __dt_2_jt<DT>::type JT;
-    static_assert(std::is_base_of<Interface, JT>::value,
-        "unsupported type");
+    static_assert(std::is_base_of<Interface, JT>::value, "unsupported type");
     auto type_to = JT::TYPE();
-    if (!_value || _value->type() == type_to) {
-        return as<JT>();
+    if (!v || v->type() == type_to) {
+        return as<JT>(v);
     }
-    switch (_value->type()) {
+    switch (v->type()) {
     case Type::STR:
-        _value = __json_to<JT, Str>::cast(*as<Str>());
+        v = __cast<JT, Str>::cast(*as<Str>(v));
         break;
     case Type::FLOAT:
-        _value = __json_to<JT, Float>::cast(*as<Float>());
+        v = __cast<JT, Float>::cast(*as<Float>(v));
         break;
     case Type::INT:
-        _value = __json_to<JT, Int>::cast(*as<Int>());
+        v = __cast<JT, Int>::cast(*as<Int>(v));
         break;
     case Type::BOOL:
-        _value = __json_to<JT, Bool>::cast(*as<Bool>());
+        v = __cast<JT, Bool>::cast(*as<Bool>(v));
         break;
     case Type::DICT:
-        _value = __json_to<JT, Dict>::cast(*as<Dict>());
+        v = __cast<JT, Dict>::cast(*as<Dict>(v));
         break;
     case Type::LIST:
-        _value = __json_to<JT, List>::cast(*as<List>());
+        v = __cast<JT, List>::cast(*as<List>(v));
         break;
     default:
         break;
     }
-    return as<JT>();
+    return as<JT>(v);
 }
 
 } // jsonho
