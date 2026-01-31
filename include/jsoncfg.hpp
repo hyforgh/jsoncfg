@@ -1,5 +1,5 @@
 /**
- * github: https://github.com/hyforgh/jsonho
+ * github: https://github.com/hyforgh/jsoncfg
  */
 
 /*
@@ -26,8 +26,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef __JSONHO_HPP__
-#define __JSONHO_HPP__
+#ifndef __JSONCFG_HPP__
+#define __JSONCFG_HPP__
 
 #include <string.h>
 #include <string>
@@ -37,11 +37,11 @@ SOFTWARE.
 #include <memory>
 #include <vector>
 
-namespace jsonho {
+namespace jsoncfg {
 
-#define JSONHO_VERSION_MAJOR 1
-#define JSONHO_VERSION_MINOR 0
-#define JSONHO_VERSION_PATCH 0
+#define JSONCFG_VERSION_MAJOR 1
+#define JSONCFG_VERSION_MINOR 0
+#define JSONCFG_VERSION_PATCH 0
 
 enum class Type {
     JSON = 0,
@@ -660,7 +660,7 @@ struct __cast {
     static std::shared_ptr<Tto> cast(const Tfrom &v) {
         static_assert(std::is_base_of<Interface, Tto>::value \
                 && std::is_base_of<Interface,  Tfrom>::value,
-            "jsonho::__cast is only applicable to jonsho types");
+            "jsoncfg::__cast is only applicable to jonsho types");
         return nullptr;
     }
 };
@@ -668,7 +668,7 @@ template <typename Tto>
 struct __cast<Tto, Str> {
     static std::shared_ptr<Tto> cast(const Str &v) {
         static_assert(std::is_base_of<Interface, Tto>::value,
-            "jsonho::__cast is only applicable to jonsho types");
+            "jsoncfg::__cast is only applicable to jonsho types");
         auto data = std::make_shared<Tto>();
         auto p = v.value().c_str();
         if (data->loads(p) != p) {
@@ -681,7 +681,7 @@ template <typename Tfrom>
 struct __cast<Str, Tfrom> {
     static std::shared_ptr<Str> cast(const Tfrom &v) {
         static_assert(std::is_base_of<Interface, Tfrom>::value,
-            "jsonho::__cast is only applicable to jonsho types");
+            "jsoncfg::__cast is only applicable to jonsho types");
         return std::make_shared<Str>(v.dumps());
     }
 };
@@ -689,7 +689,7 @@ template <typename Tfrom>
 struct __cast<Bool, Tfrom> {
     static std::shared_ptr<Bool> cast(const Tfrom &v) {
         static_assert(std::is_base_of<Interface, Tfrom>::value,
-            "jsonho::__cast is only applicable to jonsho types");
+            "jsoncfg::__cast is only applicable to jonsho types");
         auto data = std::make_shared<Bool>(true);
         auto s = v.dumps();
         if (s.empty() || s == "false" || s == "{}" || s == "[]") {
@@ -760,6 +760,6 @@ std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface
     return as<JT>(v);
 }
 
-} // jsonho
+} // jsoncfg
 
-#endif // __JSONHO_HPP__
+#endif // __JSONCFG_HPP__

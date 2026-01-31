@@ -1,7 +1,7 @@
 #include "test_helper.hpp"
 
 TEST_CASE("Bool") {
-    auto v = jsonho::Bool(true);
+    auto v = jsoncfg::Bool(true);
     SECTION("Bool::dumps()") {
         CHECK(v.value() == true);
         CHECK(v.dumps() == "true");
@@ -27,64 +27,64 @@ TEST_CASE("Bool") {
         CHECK(v.value() == true);
     }
 
-    auto j = jsonho::Json();
+    auto j = jsoncfg::Json();
     j.loads("false");
     SECTION("Json::loads(false)") {
-        CHECK(j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Bool>()->value() == false);
+        CHECK(j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Bool>()->value() == false);
     }
 
     j.loads(v.dumps());
     SECTION("Json::loads(true)") {
-        CHECK(j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Bool>()->value() == true);
+        CHECK(j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Bool>()->value() == true);
     }
 
-    j = jsonho::Str("123");
+    j = jsoncfg::Str("123");
     SECTION("Json<Bool> = Str") {
-        CHECK(!j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Str>());
-        CHECK(j.as<jsonho::Str>()->value() == "123");
+        CHECK(!j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Str>());
+        CHECK(j.as<jsoncfg::Str>()->value() == "123");
     }
 
     SECTION("Json<Str>::to<Bool>() success") {
-        CHECK(j.as<jsonho::Str>());
-        CHECK(j.as<jsonho::Str>()->value() == "123");
-        auto pi = j.to<jsonho::Bool>();
+        CHECK(j.as<jsoncfg::Str>());
+        CHECK(j.as<jsoncfg::Str>()->value() == "123");
+        auto pi = j.to<jsoncfg::Bool>();
         CHECK(pi);
         CHECK(pi->value() == true);
-        CHECK(j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Bool>() == pi);
+        CHECK(j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Bool>() == pi);
     }
 
-    j = jsonho::Bool(true);
+    j = jsoncfg::Bool(true);
     SECTION("Json<Bool>::to<Str>()") {
-        CHECK(j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Bool>()->value() == true);
-        auto pi = j.to<jsonho::Str>();
+        CHECK(j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Bool>()->value() == true);
+        auto pi = j.to<jsoncfg::Str>();
         CHECK(pi);
         CHECK(pi->value() == "true");
-        CHECK(j.as<jsonho::Str>());
-        CHECK(j.as<jsonho::Str>() == pi);
+        CHECK(j.as<jsoncfg::Str>());
+        CHECK(j.as<jsoncfg::Str>() == pi);
     }
 
     SECTION("Json<Bool>::to<Float>()") {
-        CHECK(j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Bool>()->value() == true);
-        auto pi = j.to<jsonho::Float>();
+        CHECK(j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Bool>()->value() == true);
+        auto pi = j.to<jsoncfg::Float>();
         CHECK(pi);
         CHECK(pi->value() == Approx(1).margin(1e-6));
-        CHECK(j.as<jsonho::Float>());
-        CHECK(j.as<jsonho::Float>() == pi);
+        CHECK(j.as<jsoncfg::Float>());
+        CHECK(j.as<jsoncfg::Float>() == pi);
     }
 
     SECTION("Json<Bool>::to<Int>()") {
-        CHECK(j.as<jsonho::Bool>());
-        CHECK(j.as<jsonho::Bool>()->value() == true);
-        auto pi = j.to<jsonho::Int>();
+        CHECK(j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Bool>()->value() == true);
+        auto pi = j.to<jsoncfg::Int>();
         CHECK(pi);
         CHECK(pi->value() == 1);
-        CHECK(j.as<jsonho::Int>());
-        CHECK(j.as<jsonho::Int>() == pi);
+        CHECK(j.as<jsoncfg::Int>());
+        CHECK(j.as<jsoncfg::Int>() == pi);
     }
 }

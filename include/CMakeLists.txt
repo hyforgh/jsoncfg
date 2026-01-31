@@ -1,4 +1,4 @@
-target_include_directories(jsonho INTERFACE
+target_include_directories(jsoncfg INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
 )
