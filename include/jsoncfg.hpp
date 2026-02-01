@@ -698,20 +698,6 @@ struct __cast<Bool, Tfrom> {
         return data;
     }
 };
-#define CASE_JSON_CAST_NUMBERIC(Tto, Tfrom)            \
-template <> struct __cast<Tto, Tfrom> {             \
-    static std::shared_ptr<Tto> cast(const Tfrom &v) { \
-        return std::make_shared<Tto>(v.value());       \
-    }                                                  \
-};
-CASE_JSON_CAST_NUMBERIC(Str, Str)
-CASE_JSON_CAST_NUMBERIC(Float, Int)
-CASE_JSON_CAST_NUMBERIC(Float, Bool)
-CASE_JSON_CAST_NUMBERIC(Int, Float)
-CASE_JSON_CAST_NUMBERIC(Int, Bool)
-CASE_JSON_CAST_NUMBERIC(Bool, Float)
-CASE_JSON_CAST_NUMBERIC(Bool, Int)
-#undef CASE_JSON_CAST_NUMBERIC
 template <>
 struct __cast<Bool, Str> {
     static std::shared_ptr<Bool> cast(const Str &v) {
@@ -727,12 +713,27 @@ struct __cast<Bool, Str> {
         return std::make_shared<Bool>(bv);
     }
 };
+
+#define CASE_JSON_CAST_NUMBERIC(Tto, Tfrom)            \
+template <> struct __cast<Tto, Tfrom> {                \
+    static std::shared_ptr<Tto> cast(const Tfrom &v) { \
+        return std::make_shared<Tto>(v.value());       \
+    }                                                  \
+};
+CASE_JSON_CAST_NUMBERIC(Str, Str)
+CASE_JSON_CAST_NUMBERIC(Float, Int)
+CASE_JSON_CAST_NUMBERIC(Float, Bool)
+CASE_JSON_CAST_NUMBERIC(Int, Float)
+CASE_JSON_CAST_NUMBERIC(Int, Bool)
+CASE_JSON_CAST_NUMBERIC(Bool, Float)
+CASE_JSON_CAST_NUMBERIC(Bool, Int)
+#undef CASE_JSON_CAST_NUMBERIC
+
 template <typename DT> 
 std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface> v) {
     typedef typename __dt_2_jt<DT>::type JT;
     static_assert(std::is_base_of<Interface, JT>::value, "unsupported type");
-    auto type_to = JT::TYPE();
-    if (!v || v->type() == type_to) {
+    if (!v || v->type() == JT::TYPE()) {
         return as<JT>(v);
     }
     switch (v->type()) {
