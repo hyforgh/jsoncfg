@@ -83,18 +83,18 @@ public:
 }; // Interface
 
 template <Type JT, typename DT>
-class Primary : public Interface {
+class Value : public Interface {
 public:
+    enum { TYPE = static_cast<int>(JT) };
     typedef DT value_t;
 public:
-    virtual ~Primary() {}
-    Primary(value_t v) : _value(std::move(v)) {}
-    Primary &operator = (value_t v) {
+    virtual ~Value() {}
+    Value(value_t v) : _value(std::move(v)) {}
+    Value &operator = (value_t v) {
         _value = std::move(v);
         return *this;
     }
     Type type() const override { return JT; }
-    static Type TYPE() { return JT; }
     value_t &value() { return _value; }
     const value_t &value() const { return _value; }
 protected:
@@ -103,12 +103,12 @@ protected:
 
 template <typename DT>
 struct __dt_2_jt { typedef DT type; };
-class Json final : public Primary<Type::JSON, std::shared_ptr<Interface>> {
+class Json final : public Value<Type::JSON, std::shared_ptr<Interface>> {
 public:
     using Interface::dumps;
     using Interface::loads;
 public:
-    Json() : Primary(nullptr) {}
+    Json() : Value(nullptr) {}
     template <typename T>
     Json(T v);
     template <typename T>
@@ -142,13 +142,13 @@ public:
     static std::shared_ptr<typename __dt_2_jt<T>::type> to(std::shared_ptr<Interface> v);
 }; // Json
 
-class Str final : public Primary<Type::STR, std::string> {
+class Str final : public Value<Type::STR, std::string> {
 public:
     using Interface::dumps;
     using Interface::loads;
 public:
-    Str() : Primary("") {}
-    Str(value_t v) : Primary(std::move(v)) {}
+    Str() : Value("") {}
+    Str(value_t v) : Value(std::move(v)) {}
     Str &operator = (const char *v) {
         _value = v;
         return *this;
@@ -177,13 +177,13 @@ public:
     }
 }; // Str
 
-class Float final : public Primary<Type::FLOAT, long double> {
+class Float final : public Value<Type::FLOAT, long double> {
 public:
     using Interface::dumps;
     using Interface::loads;
 public:
-    Float() : Primary(0) {}
-    Float(value_t v) : Primary(v) {}
+    Float() : Value(0) {}
+    Float(value_t v) : Value(v) {}
     void dumps(std::ostream &os) const override {
         os << _value;
     }
@@ -201,13 +201,13 @@ public:
     }
 }; // Float
 
-class Int : public Primary<Type::INT, long long> {
+class Int : public Value<Type::INT, long long> {
 public:
     using Interface::dumps;
     using Interface::loads;
 public:
-    Int() : Primary(0) {}
-    Int(value_t v) : Primary(v) {}
+    Int() : Value(0) {}
+    Int(value_t v) : Value(v) {}
     void dumps(std::ostream &os) const override {
         os << _value;
     }
@@ -239,13 +239,13 @@ public:
     }
 }; // Int
 
-class Bool final : public Primary<Type::BOOL, bool> {
+class Bool final : public Value<Type::BOOL, bool> {
 public:
     using Interface::dumps;
     using Interface::loads;
 public:
-    Bool() : Primary(false) {}
-    Bool(value_t v) : Primary(v) {}
+    Bool() : Value(false) {}
+    Bool(value_t v) : Value(v) {}
     void dumps(std::ostream &os) const override {
         os << (_value ? "true" : "false");
     }
@@ -265,15 +265,16 @@ public:
     }
 }; // Bool
 
-class ListDict {
+template <typename TK, typename TV>
+class listdict {
 private:
-    typedef std::list<std::pair<std::string, Json>> list_t;
-    typedef std::map<std::string, list_t::iterator> dict_t;
+    typedef std::list<std::pair<TK, TV>> list_t;
+    typedef std::map<TK, typename list_t::iterator> dict_t;
 public:
-    typedef list_t::iterator  iterator;
-    typedef list_t::const_iterator const_iterator;
+    typedef typename list_t::iterator  iterator;
+    typedef typename list_t::const_iterator const_iterator;
 public:
-    ListDict(std::initializer_list<std::pair<std::string, Json>> init) {
+    listdict(std::initializer_list<std::pair<TK, TV>> init) {
         for (auto &it : init) {
             auto itd = _dict.find(it.first);
             if (itd != _dict.end()) {
@@ -284,10 +285,10 @@ public:
             _dict[it.first] = --_list.end();
         }
     }
-    Json &operator [] (const std::string &key) {
+    TV &operator [] (const TK &key) {
         auto it = _dict.find(key);
         if (it == _dict.end()) {
-            _list.emplace_back(key, Json());
+            _list.emplace_back(key, TV());
             _dict[key] = --_list.end();
             return _list.rbegin()->second;
         }
@@ -299,7 +300,7 @@ public:
     iterator end() {
         return _list.end();
     }
-    iterator find(const std::string &key) {
+    iterator find(const TK &key) {
         auto it = _dict.find(key);
         if (it == _dict.end()) {
             return _list.end();
@@ -312,7 +313,7 @@ public:
     const_iterator end() const {
         return _list.end();
     }
-    const_iterator find(const std::string &key) const {
+    const_iterator find(const TK &key) const {
         auto it = _dict.find(key);
         if (it == _dict.end()) {
             return _list.end();
@@ -327,15 +328,15 @@ private:
     list_t _list;
     dict_t _dict;
 };
-class Dict final : public Primary<Type::DICT, ListDict> {
+class Dict final : public Value<Type::DICT, listdict<std::string, Json>> {
 public:
     using Interface::dumps;
     using Interface::loads;
     typedef value_t::iterator iterator;
     typedef value_t::const_iterator const_iterator;
 public:
-    Dict() : Primary({}) {}
-    Dict(value_t v) : Primary(std::move(v)) {}
+    Dict() : Value({}) {}
+    Dict(value_t v) : Value(std::move(v)) {}
     void dumps(std::ostream &os) const override {
         os << "{";
         bool is_first = true;
@@ -392,7 +393,10 @@ public:
         }
         return psz;
     }
-    Dict &set(std::string k, Json v) {
+    Json &operator [] (const std::string &k) {
+        return _value[k];
+    }
+    Dict &set(const std::string &k, Json v) {
         _value[k] = std::move(v);
         return *this;
     }
@@ -423,7 +427,7 @@ public:
     }
 }; // Dict
 
-class List final : public Primary<Type::LIST, std::list<Json>> {
+class List final : public Value<Type::LIST, std::list<Json>> {
 public:
     using Interface::dumps;
     using Interface::loads;
@@ -432,8 +436,8 @@ public:
     typedef value_t::reverse_iterator reverse_iterator;
     typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
-    List() : Primary({}) {}
-    List(value_t v) : Primary(std::move(v)) {}
+    List() : Value({}) {}
+    List(value_t v) : Value(std::move(v)) {}
     void dumps(std::ostream &os) const override {
         os << "[";
         bool is_first = true;
@@ -569,17 +573,17 @@ private:
     }
 }; // List
 
-#define CASE_JSON_TYPE(JT)                          \
-template <> Json::Json(JT v)                        \
-    : Primary(std::make_shared<JT>(std::move(v))) { \
-}                                                   \
+#define CASE_JSON_TYPE(JT)                        \
+template <> Json::Json(JT v)                      \
+    : Value(std::make_shared<JT>(std::move(v))) { \
+}                                                 \
 template <> Json &Json::operator = (std::remove_const<JT>::type v) { \
     _value = std::make_shared<JT>(std::move(v));                     \
     return *this;                                                    \
 }                                                                                          \
 template <>                                                                                \
 std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>(std::shared_ptr<Interface> v) { \
-    if (!v || v->type() != JT::TYPE()) {                                                   \
+    if (!v || v->type() != static_cast<Type>(JT::TYPE)) {                                  \
         return nullptr;                                                                    \
     }                                                                                      \
     return std::static_pointer_cast<JT>(v->shared_from_this());                            \
@@ -592,14 +596,14 @@ CASE_JSON_TYPE(Dict)
 CASE_JSON_TYPE(List)
 #undef CASE_JSON_TYPE
 
-#define CASE_DATA_TYPE(JT, DT)                      \
-template <> Json::Json(DT v)                        \
-    : Primary(std::make_shared<JT>(std::move(v))) { \
+#define CASE_DATA_TYPE(JT, DT)                    \
+template <> Json::Json(DT v)                      \
+    : Value(std::make_shared<JT>(std::move(v))) { \
 }                                                                \
 template <> struct __dt_2_jt<DT> { typedef JT type; };           \
 template <>                                                      \
 std::shared_ptr<JT> Json::as<DT>(std::shared_ptr<Interface> v) { \
-    if (!v || v->type() != JT::TYPE()) {                         \
+    if (!v || v->type() != static_cast<Type>(JT::TYPE)) {        \
         return nullptr;                                          \
     }                                                            \
     return std::static_pointer_cast<JT>(v->shared_from_this());  \
@@ -733,7 +737,7 @@ template <typename DT>
 std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface> v) {
     typedef typename __dt_2_jt<DT>::type JT;
     static_assert(std::is_base_of<Interface, JT>::value, "unsupported type");
-    if (!v || v->type() == JT::TYPE()) {
+    if (!v || v->type() == static_cast<Type>(JT::TYPE)) {
         return as<JT>(v);
     }
     switch (v->type()) {
