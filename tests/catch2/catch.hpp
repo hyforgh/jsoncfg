@@ -4599,20 +4599,20 @@ namespace Catch {
 namespace Catch {
 namespace Generators {
 
-template <typename Float>
-class RandomFloatingGenerator final : public IGenerator<Float> {
+template <typename Dec>
+class RandomFloatingGenerator final : public IGenerator<Dec> {
     Catch::SimplePcg32& m_rng;
-    std::uniform_real_distribution<Float> m_dist;
-    Float m_current_number;
+    std::uniform_real_distribution<Dec> m_dist;
+    Dec m_current_number;
 public:
 
-    RandomFloatingGenerator(Float a, Float b):
+    RandomFloatingGenerator(Dec a, Dec b):
         m_rng(rng()),
         m_dist(a, b) {
         static_cast<void>(next());
     }
 
-    Float const& get() const override {
+    Dec const& get() const override {
         return m_current_number;
     }
     bool next() override {
@@ -11561,7 +11561,7 @@ namespace Matchers {
 namespace Floating {
 
     enum class FloatingPointKind : uint8_t {
-        Float,
+        Dec,
         Double
     };
 
@@ -11596,7 +11596,7 @@ namespace Floating {
 
     bool WithinUlpsMatcher::match(double const& matchee) const {
         switch (m_type) {
-        case FloatingPointKind::Float:
+        case FloatingPointKind::Dec:
             return almostEqualUlps<float>(static_cast<float>(matchee), static_cast<float>(m_target), m_ulps);
         case FloatingPointKind::Double:
             return almostEqualUlps<double>(matchee, m_target, m_ulps);
@@ -11614,7 +11614,7 @@ namespace Floating {
 
         ret << "is within " << m_ulps << " ULPs of ";
 
-        if (m_type == FloatingPointKind::Float) {
+        if (m_type == FloatingPointKind::Dec) {
             write(ret, static_cast<float>(m_target));
             ret << 'f';
         } else {
@@ -11663,7 +11663,7 @@ Floating::WithinUlpsMatcher WithinULP(double target, uint64_t maxUlpDiff) {
 }
 
 Floating::WithinUlpsMatcher WithinULP(float target, uint64_t maxUlpDiff) {
-    return Floating::WithinUlpsMatcher(target, maxUlpDiff, Floating::FloatingPointKind::Float);
+    return Floating::WithinUlpsMatcher(target, maxUlpDiff, Floating::FloatingPointKind::Dec);
 }
 
 Floating::WithinAbsMatcher WithinAbs(double target, double margin) {

@@ -46,12 +46,12 @@ namespace jsoncfg {
 enum class Type {
     JSON = 0,
     STR,
-    FLOAT,
+    DEC,
     INT,
     BOOL,
     DICT,
     LIST,
-    COUNT
+    AGENT
 }; // Type
 
 class Interface : public std::enable_shared_from_this<Interface> {
@@ -101,6 +101,43 @@ protected:
     DT _value;
 };
 
+template <typename JT>
+class Agent {
+public:
+    typedef typename JT::value_t value_t;
+public:
+    Agent(std::shared_ptr<JT> v = std::make_shared<JT>()) : _value(std::move(v)) {}
+    virtual ~Agent() {}
+    operator bool () const {
+        return bool(_value);
+    }
+    JT &operator = (typename JT::value_t v) {
+        auto &obj = *_value;
+        obj = v;
+        return obj;
+    }
+    value_t &value() {
+        return _value->value();
+    }
+    const value_t &value() const {
+        return _value->value();
+    }
+    std::shared_ptr<JT> agent() {
+        return _value;
+    }
+protected:
+    std::shared_ptr<JT> _value;
+};
+
+template <typename JT>
+class JsonT : public Agent<JT> {
+public:
+    using Agent<JT>::operator =;
+public:
+    JsonT(std::shared_ptr<JT> v = std::make_shared<JT>())
+        : Agent<JT>(std::move(v)) {}
+};
+
 template <typename DT>
 struct __dt_2_jt { typedef DT type; };
 class Json final : public Value<Type::JSON, std::shared_ptr<Interface>> {
@@ -122,11 +159,11 @@ public:
     }
     const char *loads(const char *psz) override;
     template <typename T>
-    std::shared_ptr<typename __dt_2_jt<T>::type> as() {
+    JsonT<typename __dt_2_jt<T>::type> as() {
         return as<T>(_value);
     }
     template <typename T>
-    std::shared_ptr<typename __dt_2_jt<T>::type> to() {
+    JsonT<typename __dt_2_jt<T>::type> to() {
         auto v = to<T>(_value);
         _value = v;
         return v;
@@ -177,13 +214,13 @@ public:
     }
 }; // Str
 
-class Float final : public Value<Type::FLOAT, long double> {
+class Dec final : public Value<Type::DEC, long double> {
 public:
     using Interface::dumps;
     using Interface::loads;
 public:
-    Float() : Value(0) {}
-    Float(value_t v) : Value(v) {}
+    Dec() : Value(0) {}
+    Dec(value_t v) : Value(v) {}
     void dumps(std::ostream &os) const override {
         os << _value;
     }
@@ -199,7 +236,7 @@ public:
         }
         return psz;
     }
-}; // Float
+}; // Dec
 
 class Int : public Value<Type::INT, long long> {
 public:
@@ -266,7 +303,7 @@ public:
 }; // Bool
 
 template <typename TK, typename TV>
-class listdict {
+class OrderedDict {
 private:
     typedef std::list<std::pair<TK, TV>> list_t;
     typedef std::map<TK, typename list_t::iterator> dict_t;
@@ -274,7 +311,7 @@ public:
     typedef typename list_t::iterator  iterator;
     typedef typename list_t::const_iterator const_iterator;
 public:
-    listdict(std::initializer_list<std::pair<TK, TV>> init) {
+    OrderedDict(std::initializer_list<std::pair<TK, TV>> init) {
         for (auto &it : init) {
             auto itd = _dict.find(it.first);
             if (itd != _dict.end()) {
@@ -328,7 +365,7 @@ private:
     list_t _list;
     dict_t _dict;
 };
-class Dict final : public Value<Type::DICT, listdict<std::string, Json>> {
+class Dict final : public Value<Type::DICT, OrderedDict<std::string, Json>> {
 public:
     using Interface::dumps;
     using Interface::loads;
@@ -396,6 +433,9 @@ public:
     Json &operator [] (const std::string &k) {
         return _value[k];
     }
+    Json &operator [] (const char *k) {
+        return _value[k];
+    }
     Dict &set(const std::string &k, Json v) {
         _value[k] = std::move(v);
         return *this;
@@ -426,6 +466,47 @@ public:
         return _value.find(key);
     }
 }; // Dict
+
+template <>
+class JsonT<Dict> : public Agent<Dict> {
+public:
+    typedef value_t::iterator iterator;
+    typedef value_t::const_iterator const_iterator;
+public:
+    JsonT(std::shared_ptr<Dict> v = std::make_shared<Dict>())
+        : Agent<Dict>(std::move(v)) {}
+    Json &operator [] (const std::string &k) {
+        return (*_value)[k];
+    }
+    Json &operator [] (const char *k) {
+        return (*_value)[k];
+    }
+    JsonT &set(const std::string &k, Json v) {
+        _value->set(k, std::move(v));
+        return *this;
+    }
+    Json get(const std::string &k, Json default_value = Json()) const {
+        return _value->get(k, std::move(default_value));
+    }
+    iterator begin() {
+        return _value->begin();
+    }
+    iterator end() {
+        return _value->end();
+    }
+    iterator find(const std::string &key) {
+        return _value->find(key);
+    }
+    const_iterator begin() const {
+        return _value->begin();
+    }
+    const_iterator end() const {
+        return _value->end();
+    }
+    const_iterator find(const std::string &key) const {
+        return _value->find(key);
+    }
+};
 
 class List final : public Value<Type::LIST, std::list<Json>> {
 public:
@@ -573,10 +654,80 @@ private:
     }
 }; // List
 
+template <>
+class JsonT<List> : public Agent<List> {
+public:
+    typedef value_t::iterator iterator;
+    typedef value_t::const_iterator const_iterator;
+    typedef value_t::reverse_iterator reverse_iterator;
+    typedef value_t::const_reverse_iterator const_reverse_iterator;
+public:
+    JsonT(std::shared_ptr<List> v = std::make_shared<List>())
+        : Agent<List>(std::move(v)) {}
+    Json &operator [] (unsigned i) {
+        return _value->get(i);
+    }
+    JsonT &append(Json v) {
+        _value->append(std::move(v));
+        return *this;
+    }
+    JsonT &insert(unsigned i, Json v) {
+        _value->insert(i, std::move(v));
+        return *this;
+    }
+    Json &get(unsigned i) {
+        return _value->get(i);
+    }
+    const Json &get(unsigned i) const {
+        return _value->get(i);
+    }
+    JsonT &set(unsigned i, Json v) {
+        _value->set(i, std::move(v));
+        return *this;
+    }
+    std::vector<iterator> iterators() {
+        return _value->iterators();
+    }
+    template<typename T>
+    std::vector<T> vector(const T &default_value) const {
+        return _value->vector<T>(default_value);
+    }
+    size_t size() const {
+        return _value->size();
+    }
+    iterator begin() {
+        return _value->begin();
+    }
+    iterator end() {
+        return _value->end();
+    }
+    const_iterator begin() const {
+        return _value->begin();
+    }
+    const_iterator end() const {
+        return _value->end();
+    }
+    reverse_iterator rbegin() {
+        return _value->rbegin();
+    }
+    reverse_iterator rend() {
+        return _value->rend();
+    }
+    const_reverse_iterator rbegin() const {
+        return _value->rbegin();
+    }
+    const_reverse_iterator rend() const {
+        return _value->rend();
+    }
+};
+
 #define CASE_JSON_TYPE(JT)                        \
 template <> Json::Json(JT v)                      \
     : Value(std::make_shared<JT>(std::move(v))) { \
 }                                                 \
+template <> Json::Json(JsonT<typename __dt_2_jt<JT>::type> v) \
+    : Value(v.agent()) {                                      \
+}                                                             \
 template <> Json &Json::operator = (std::remove_const<JT>::type v) { \
     _value = std::make_shared<JT>(std::move(v));                     \
     return *this;                                                    \
@@ -589,7 +740,7 @@ std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>(std::shared_ptr<Inter
     return std::static_pointer_cast<JT>(v->shared_from_this());                            \
 }
 CASE_JSON_TYPE(Str)
-CASE_JSON_TYPE(Float)
+CASE_JSON_TYPE(Dec)
 CASE_JSON_TYPE(Int)
 CASE_JSON_TYPE(Bool)
 CASE_JSON_TYPE(Dict)
@@ -610,9 +761,9 @@ std::shared_ptr<JT> Json::as<DT>(std::shared_ptr<Interface> v) { \
 }
 CASE_DATA_TYPE(Str, std::string)
 CASE_DATA_TYPE(Str, const char *)
-CASE_DATA_TYPE(Float, long double)
-CASE_DATA_TYPE(Float, double)
-CASE_DATA_TYPE(Float, float)
+CASE_DATA_TYPE(Dec, long double)
+CASE_DATA_TYPE(Dec, double)
+CASE_DATA_TYPE(Dec, float)
 CASE_DATA_TYPE(Int, unsigned long long)
 CASE_DATA_TYPE(Int, unsigned long)
 CASE_DATA_TYPE(Int, unsigned int)
@@ -643,7 +794,7 @@ const char *Json::loads(const char *psz) {
         auto e = _value->loads(psz);
         if (e != psz) {
             if (*e == '.') {
-                CASE_JSON_TYPE(Float);
+                CASE_JSON_TYPE(Dec);
             }
             return e;
         }
@@ -710,7 +861,7 @@ struct __cast<Bool, Str> {
         if (vs.empty() || vs == "null" || vs == "false" || vs == "{}" || vs == "[]") {
             bv = false;
         } else {
-            auto f = Float();
+            auto f = Dec();
             f.loads(vs);
             bv = f.value();
         }
@@ -725,11 +876,11 @@ template <> struct __cast<Tto, Tfrom> {                \
     }                                                  \
 };
 CASE_JSON_CAST_NUMBERIC(Str, Str)
-CASE_JSON_CAST_NUMBERIC(Float, Int)
-CASE_JSON_CAST_NUMBERIC(Float, Bool)
-CASE_JSON_CAST_NUMBERIC(Int, Float)
+CASE_JSON_CAST_NUMBERIC(Dec, Int)
+CASE_JSON_CAST_NUMBERIC(Dec, Bool)
+CASE_JSON_CAST_NUMBERIC(Int, Dec)
 CASE_JSON_CAST_NUMBERIC(Int, Bool)
-CASE_JSON_CAST_NUMBERIC(Bool, Float)
+CASE_JSON_CAST_NUMBERIC(Bool, Dec)
 CASE_JSON_CAST_NUMBERIC(Bool, Int)
 #undef CASE_JSON_CAST_NUMBERIC
 
@@ -744,8 +895,8 @@ std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface
     case Type::STR:
         v = __cast<JT, Str>::cast(*as<Str>(v));
         break;
-    case Type::FLOAT:
-        v = __cast<JT, Float>::cast(*as<Float>(v));
+    case Type::DEC:
+        v = __cast<JT, Dec>::cast(*as<Dec>(v));
         break;
     case Type::INT:
         v = __cast<JT, Int>::cast(*as<Int>(v));
