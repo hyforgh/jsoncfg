@@ -51,7 +51,7 @@ enum class Type {
     BOOL,
     DICT,
     LIST,
-    AGENT
+    COUNT
 }; // Type
 
 class Interface : public std::enable_shared_from_this<Interface> {
@@ -94,12 +94,22 @@ public:
         _value = std::move(v);
         return *this;
     }
+    bool operator == (const value_t &v) const {
+        return _value == v;
+    }
+    bool operator == (const Value &v) const {
+        return _value == v._value;
+    }
     Type type() const override { return JT; }
     value_t &value() { return _value; }
     const value_t &value() const { return _value; }
 protected:
     DT _value;
 };
+template <Type JT, typename DT>
+bool operator == (const DT &v, const Value<JT, DT> &obj) {
+    return obj == v;
+}
 
 template <typename JT>
 class Agent {
@@ -109,18 +119,24 @@ public:
     Agent(std::shared_ptr<JT> v = std::make_shared<JT>()) : _value(std::move(v)) {}
     virtual ~Agent() {}
     operator bool () const {
-        return bool(_value);
+        return _value.get() != nullptr;
     }
-    JT &operator = (typename JT::value_t v) {
+    JT *operator -> () {
+        return _value.get();
+    }
+    const JT *operator -> () const {
+        return _value.get();
+    }
+    JT &operator * () {
+        return *_value.get();
+    }
+    const JT &operator * () const {
+        return *_value.get();
+    }
+    JT &operator = (value_t v) {
         auto &obj = *_value;
         obj = v;
         return obj;
-    }
-    value_t &value() {
-        return _value->value();
-    }
-    const value_t &value() const {
-        return _value->value();
     }
     std::shared_ptr<JT> agent() {
         return _value;
@@ -214,7 +230,19 @@ public:
     }
 }; // Str
 
-class Dec final : public Value<Type::DEC, long double> {
+template <>
+class JsonT<Str> : public Agent<Str> {
+public:
+    using Agent::operator =;
+public:
+    JsonT(std::shared_ptr<Str> v = std::make_shared<Str>())
+        : Agent<Str>(std::move(v)) {}
+    char &operator [] (unsigned i) {
+        return _value->value()[i];
+    }
+};
+
+class Dec final : public Value<Type::DEC, double> {
 public:
     using Interface::dumps;
     using Interface::loads;
@@ -310,6 +338,8 @@ private:
 public:
     typedef typename list_t::iterator  iterator;
     typedef typename list_t::const_iterator const_iterator;
+    typedef typename list_t::reverse_iterator  reverse_iterator;
+    typedef typename list_t::const_reverse_iterator const_reverse_iterator;
 public:
     OrderedDict(std::initializer_list<std::pair<TK, TV>> init) {
         for (auto &it : init) {
@@ -331,24 +361,12 @@ public:
         }
         return it->second->second;
     }
-    iterator begin() {
-        return _list.begin();
-    }
-    iterator end() {
-        return _list.end();
-    }
     iterator find(const TK &key) {
         auto it = _dict.find(key);
         if (it == _dict.end()) {
             return _list.end();
         }
         return it->second;
-    }
-    const_iterator begin() const {
-        return _list.begin();
-    }
-    const_iterator end() const {
-        return _list.end();
     }
     const_iterator find(const TK &key) const {
         auto it = _dict.find(key);
@@ -361,6 +379,15 @@ public:
         _list.clear();
         _dict.clear();
     }
+    size_t size() const { return _list.size(); }
+    iterator begin() { return _list.begin(); }
+    iterator end() { return _list.end(); }
+    const_iterator begin() const { return _list.begin(); }
+    const_iterator end() const { return _list.end(); }
+    reverse_iterator rbegin() { return _list.rbegin(); }
+    reverse_iterator rend() { return _list.rend(); }
+    const_reverse_iterator rbegin() const { return _list.rbegin(); }
+    const_reverse_iterator rend() const { return _list.rend(); }
 private:
     list_t _list;
     dict_t _dict;
@@ -371,6 +398,8 @@ public:
     using Interface::loads;
     typedef value_t::iterator iterator;
     typedef value_t::const_iterator const_iterator;
+    typedef value_t::reverse_iterator reverse_iterator;
+    typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
     Dict() : Value({}) {}
     Dict(value_t v) : Value(std::move(v)) {}
@@ -447,24 +476,22 @@ public:
         }
         return it->second;
     }
-    iterator begin() {
-        return _value.begin();
-    }
-    iterator end() {
-        return _value.end();
-    }
     iterator find(const std::string &key) {
         return _value.find(key);
-    }
-    const_iterator begin() const {
-        return _value.begin();
-    }
-    const_iterator end() const {
-        return _value.end();
     }
     const_iterator find(const std::string &key) const {
         return _value.find(key);
     }
+    void clear() { _value.clear(); }
+    size_t size() const { return _value.size(); }
+    iterator begin() { return _value.begin(); }
+    iterator end() { return _value.end(); }
+    const_iterator begin() const { return _value.begin(); }
+    const_iterator end() const { return _value.end(); }
+    reverse_iterator rbegin() { return _value.rbegin(); }
+    reverse_iterator rend() { return _value.rend(); }
+    const_reverse_iterator rbegin() const { return _value.rbegin(); }
+    const_reverse_iterator rend() const { return _value.rend(); }
 }; // Dict
 
 template <>
@@ -480,31 +507,6 @@ public:
     }
     Json &operator [] (const char *k) {
         return (*_value)[k];
-    }
-    JsonT &set(const std::string &k, Json v) {
-        _value->set(k, std::move(v));
-        return *this;
-    }
-    Json get(const std::string &k, Json default_value = Json()) const {
-        return _value->get(k, std::move(default_value));
-    }
-    iterator begin() {
-        return _value->begin();
-    }
-    iterator end() {
-        return _value->end();
-    }
-    iterator find(const std::string &key) {
-        return _value->find(key);
-    }
-    const_iterator begin() const {
-        return _value->begin();
-    }
-    const_iterator end() const {
-        return _value->end();
-    }
-    const_iterator find(const std::string &key) const {
-        return _value->find(key);
     }
 };
 
@@ -603,33 +605,16 @@ public:
         }
         return vec;
     }
-    size_t size() const {
-        return _value.size();
-    }
-    iterator begin() {
-        return _value.begin();
-    }
-    iterator end() {
-        return _value.end();
-    }
-    const_iterator begin() const {
-        return _value.begin();
-    }
-    const_iterator end() const {
-        return _value.end();
-    }
-    reverse_iterator rbegin() {
-        return _value.rbegin();
-    }
-    reverse_iterator rend() {
-        return _value.rend();
-    }
-    const_reverse_iterator rbegin() const {
-        return _value.rbegin();
-    }
-    const_reverse_iterator rend() const {
-        return _value.rend();
-    }
+    void clear() { _value.clear(); }
+    size_t size() const { return _value.size(); }
+    iterator begin() { return _value.begin(); }
+    iterator end() { return _value.end(); }
+    const_iterator begin() const { return _value.begin(); }
+    const_iterator end() const { return _value.end(); }
+    reverse_iterator rbegin() { return _value.rbegin(); }
+    reverse_iterator rend() { return _value.rend(); }
+    const_reverse_iterator rbegin() const { return _value.rbegin(); }
+    const_reverse_iterator rend() const { return _value.rend(); }
 private:
     iterator iterator_at(unsigned i) {
 #define ITERATOR_AT()               \
@@ -666,58 +651,6 @@ public:
         : Agent<List>(std::move(v)) {}
     Json &operator [] (unsigned i) {
         return _value->get(i);
-    }
-    JsonT &append(Json v) {
-        _value->append(std::move(v));
-        return *this;
-    }
-    JsonT &insert(unsigned i, Json v) {
-        _value->insert(i, std::move(v));
-        return *this;
-    }
-    Json &get(unsigned i) {
-        return _value->get(i);
-    }
-    const Json &get(unsigned i) const {
-        return _value->get(i);
-    }
-    JsonT &set(unsigned i, Json v) {
-        _value->set(i, std::move(v));
-        return *this;
-    }
-    std::vector<iterator> iterators() {
-        return _value->iterators();
-    }
-    template<typename T>
-    std::vector<T> vector(const T &default_value) const {
-        return _value->vector<T>(default_value);
-    }
-    size_t size() const {
-        return _value->size();
-    }
-    iterator begin() {
-        return _value->begin();
-    }
-    iterator end() {
-        return _value->end();
-    }
-    const_iterator begin() const {
-        return _value->begin();
-    }
-    const_iterator end() const {
-        return _value->end();
-    }
-    reverse_iterator rbegin() {
-        return _value->rbegin();
-    }
-    reverse_iterator rend() {
-        return _value->rend();
-    }
-    const_reverse_iterator rbegin() const {
-        return _value->rbegin();
-    }
-    const_reverse_iterator rend() const {
-        return _value->rend();
     }
 };
 
@@ -892,26 +825,13 @@ std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface
         return as<JT>(v);
     }
     switch (v->type()) {
-    case Type::STR:
-        v = __cast<JT, Str>::cast(*as<Str>(v));
-        break;
-    case Type::DEC:
-        v = __cast<JT, Dec>::cast(*as<Dec>(v));
-        break;
-    case Type::INT:
-        v = __cast<JT, Int>::cast(*as<Int>(v));
-        break;
-    case Type::BOOL:
-        v = __cast<JT, Bool>::cast(*as<Bool>(v));
-        break;
-    case Type::DICT:
-        v = __cast<JT, Dict>::cast(*as<Dict>(v));
-        break;
-    case Type::LIST:
-        v = __cast<JT, List>::cast(*as<List>(v));
-        break;
-    default:
-        break;
+    case Type::STR: v = __cast<JT, Str>::cast(*as<Str>(v)); break;
+    case Type::DEC: v = __cast<JT, Dec>::cast(*as<Dec>(v)); break;
+    case Type::INT: v = __cast<JT, Int>::cast(*as<Int>(v)); break;
+    case Type::BOOL: v = __cast<JT, Bool>::cast(*as<Bool>(v)); break;
+    case Type::DICT: v = __cast<JT, Dict>::cast(*as<Dict>(v)); break;
+    case Type::LIST: v = __cast<JT, List>::cast(*as<List>(v)); break;
+    default: break;
     }
     return as<JT>(v);
 }
