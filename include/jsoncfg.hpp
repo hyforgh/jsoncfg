@@ -58,11 +58,14 @@ class Interface : public std::enable_shared_from_this<Interface> {
 public:
     virtual ~Interface() {}
     virtual Type type() const = 0;
-    virtual void dumps(std::ostream &os) const = 0;
+    virtual void dumps(std::ostream &os
+            , unsigned indent = 0, bool keep_layout = false) const {
+        dumps_depth(os, indent, keep_layout, 0);
+    }
     virtual const char *loads(const char *psz) = 0;
-    virtual std::string dumps() const {
+    virtual std::string dumps(unsigned indent = 0, bool keep_layout = false) const {
         std::stringstream ss;
-        dumps(ss);
+        dumps(ss, indent, keep_layout);
         return ss.str();
     }
     virtual size_t loads(const std::string &s) {
@@ -80,6 +83,17 @@ public:
         }
         return p;
     }
+protected:
+    friend class Json;
+    virtual void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const = 0;
+    void dumps_head_indent(std::ostream &os, unsigned indent, unsigned depth) const {
+        os << "\n";
+        for (unsigned i = 0; i < indent * depth; ++i) {
+            os << " ";
+        }
+    }
+    virtual bool is_head() const = 0;
 }; // Interface
 
 template <Type JT, typename DT>
@@ -89,7 +103,8 @@ public:
     typedef DT value_t;
 public:
     virtual ~Value() {}
-    Value(value_t v) : _value(std::move(v)) {}
+    Value(value_t v, bool is_head = false)
+        : _value(std::move(v)), _is_head(is_head) {}
     Value &operator = (value_t v) {
         _value = std::move(v);
         return *this;
@@ -104,7 +119,10 @@ public:
     value_t &value() { return _value; }
     const value_t &value() const { return _value; }
 protected:
+    bool is_head() const override { return _is_head; }
+protected:
     DT _value;
+    bool _is_head;
 };
 template <Type JT, typename DT>
 bool operator == (const DT &v, const Value<JT, DT> &obj) {
@@ -158,7 +176,6 @@ template <typename DT>
 struct __dt_2_jt { typedef DT type; };
 class Json final : public Value<Type::JSON, std::shared_ptr<Interface>> {
 public:
-    using Interface::dumps;
     using Interface::loads;
 public:
     Json() : Value(nullptr) {}
@@ -166,9 +183,10 @@ public:
     Json(T v);
     template <typename T>
     Json &operator = (T v);
-    void dumps(std::ostream &os) const override {
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
         if (_value) {
-            _value->dumps(os);
+            _value->dumps_depth(os, indent, keep_layout, depth);
         } else {
             os << "null";
         }
@@ -193,23 +211,31 @@ public:
     }
     template <typename T>
     static std::shared_ptr<typename __dt_2_jt<T>::type> to(std::shared_ptr<Interface> v);
+protected:
+    friend class Dict;
+    friend class List;
+    bool is_head() const override {
+        if (_value) {
+            return _value->is_head();
+        }
+        return _is_head;
+    }
 }; // Json
 
 class Str final : public Value<Type::STR, std::string> {
 public:
-    using Interface::dumps;
     using Interface::loads;
 public:
-    Str() : Value("") {}
-    Str(value_t v) : Value(std::move(v)) {}
+    Str(value_t v = "", bool is_head = false) : Value(std::move(v), is_head) {}
     Str &operator = (const char *v) {
         _value = v;
         return *this;
     }
-    void dumps(std::ostream &os) const override {
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
         os << "\"" << _value << "\"";
     }
-    const char *loads(const char *psz) {
+    const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
@@ -244,15 +270,15 @@ public:
 
 class Dec final : public Value<Type::DEC, double> {
 public:
-    using Interface::dumps;
     using Interface::loads;
 public:
-    Dec() : Value(0) {}
-    Dec(value_t v) : Value(v) {}
-    void dumps(std::ostream &os) const override {
+    Dec(value_t v = 0, unsigned scientific_notation = false, bool is_head = false)
+        : Value(v, is_head), _scientific_notation(scientific_notation) {}
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
         os << _value;
     }
-    const char *loads(const char *psz) {
+    const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
@@ -264,57 +290,60 @@ public:
         }
         return psz;
     }
+private:
+    bool _scientific_notation;
 }; // Dec
 
 class Int : public Value<Type::INT, long long> {
 public:
-    using Interface::dumps;
     using Interface::loads;
 public:
-    Int() : Value(0) {}
-    Int(value_t v) : Value(v) {}
-    void dumps(std::ostream &os) const override {
+    Int(value_t v = 0, unsigned base = 10, bool is_head = false)
+        : Value(v, is_head), _base(base) {}
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
         os << _value;
     }
-    const char *loads(const char *psz) {
+    const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
         auto p = skip_blank(psz);
-        int base = 10;
+        _base = 10;
         if (*p == '0') {
             ++p;
             if (*p == 'x' || *p == 'X') {
-                base = 16;
+                _base = 16;
             } else if (*p == 'o' || *p == 'O') {
-                base = 8;
+                _base = 8;
             } else if (*p == 'b' || *p == 'B') {
-                base = 2;
+                _base = 2;
             }
-            if (base != 10) {
+            if (_base != 10) {
                 ++p;
             }
         }
         char *e;
-        _value = std::strtoll(p, &e, base);
+        _value = std::strtoll(p, &e, _base);
         if (e != p) {
             return e;
         }
         return psz;
     }
+private:
+    unsigned _base;
 }; // Int
 
 class Bool final : public Value<Type::BOOL, bool> {
 public:
-    using Interface::dumps;
     using Interface::loads;
 public:
-    Bool() : Value(false) {}
-    Bool(value_t v) : Value(v) {}
-    void dumps(std::ostream &os) const override {
+    Bool(value_t v = false, bool is_head = false) : Value(v, is_head) {}
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
         os << (_value ? "true" : "false");
     }
-    const char *loads(const char *psz) {
+    const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
@@ -394,30 +423,50 @@ private:
 };
 class Dict final : public Value<Type::DICT, OrderedDict<std::string, Json>> {
 public:
-    using Interface::dumps;
     using Interface::loads;
     typedef value_t::iterator iterator;
     typedef value_t::const_iterator const_iterator;
     typedef value_t::reverse_iterator reverse_iterator;
     typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
-    Dict() : Value({}) {}
-    Dict(value_t v) : Value(std::move(v)) {}
-    void dumps(std::ostream &os) const override {
+    Dict(value_t v = {}, unsigned items_per_line = 1, bool is_head = false)
+        : Value(std::move(v), is_head), _width(items_per_line) {}
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
         os << "{";
+        unsigned width = 0;
         bool is_first = true;
         for (auto &it : _value) {
-            if (is_first) {
-                is_first = false;
-            } else {
+            if (!is_first) {
                 os << ",";
             }
+            if (indent) {
+                if (keep_layout) {
+                    ++width;
+                    if ((is_first && _width) || it.second.is_head() || (_width && width >= _width)) {
+                        dumps_head_indent(os, indent, depth + 1);
+                        width = 0;
+                    }
+                } else {
+                    dumps_head_indent(os, indent, depth + 1);
+                }
+            }
+            if (!is_first && width) {
+                os << " ";
+            }
             os << "\"" << it.first << "\":";
-            it.second.dumps(os);
+            if (indent) {
+                os << " ";
+            }
+            it.second.dumps_depth(os, indent, keep_layout, depth + 1);
+            is_first = false;
+        }
+        if (indent && (!keep_layout || _width)) {
+            dumps_head_indent(os, indent, depth);
         }
         os << "}";
     }
-    const char *loads(const char *psz) {
+    const char *loads(const char *psz) override {
         _value.clear();
         if (!psz) {
             return psz;
@@ -492,6 +541,8 @@ public:
     reverse_iterator rend() { return _value.rend(); }
     const_reverse_iterator rbegin() const { return _value.rbegin(); }
     const_reverse_iterator rend() const { return _value.rend(); }
+protected:
+    unsigned _width;
 }; // Dict
 
 template <>
@@ -512,29 +563,46 @@ public:
 
 class List final : public Value<Type::LIST, std::list<Json>> {
 public:
-    using Interface::dumps;
     using Interface::loads;
     typedef value_t::iterator iterator;
     typedef value_t::const_iterator const_iterator;
     typedef value_t::reverse_iterator reverse_iterator;
     typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
-    List() : Value({}) {}
-    List(value_t v) : Value(std::move(v)) {}
-    void dumps(std::ostream &os) const override {
+    List(value_t v = {}, unsigned items_per_line = 1, bool is_head = false)
+        : Value(std::move(v), is_head), _width(items_per_line) {}
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
         os << "[";
+        unsigned width = 0;
         bool is_first = true;
         for (auto &it : _value) {
-            if (is_first) {
-                is_first = false;
-            } else {
+            if (!is_first) {
                 os << ",";
             }
-            it.dumps(os);
+            if (indent) {
+                if (keep_layout) {
+                    ++width;
+                    if ((is_first && _width) || it.is_head() || (_width && width >= _width)) {
+                        dumps_head_indent(os, indent, depth + 1);
+                        width = 0;
+                    }
+                } else {
+                    dumps_head_indent(os, indent, depth + 1);
+                }
+            }
+            if (!is_first && width) {
+                os << " ";
+            }
+            it.dumps_depth(os, indent, keep_layout, depth + 1);
+            is_first = false;
+        }
+        if (indent && (!keep_layout || _width)) {
+            dumps_head_indent(os, indent, depth);
         }
         os << "]";
     }
-    const char *loads(const char *psz) {
+    const char *loads(const char *psz) override {
         _value.clear();
         if (!psz) {
             return psz;
@@ -637,6 +705,8 @@ private:
         ITERATOR_AT();
 #undef ITERATOR_AT
     }
+protected:
+    unsigned _width;
 }; // List
 
 template <>
