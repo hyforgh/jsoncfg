@@ -74,11 +74,17 @@ public:
         return e - p;
     }
 public:
-    static const char *skip_blank(const char *p) {
+    static const char *skip_blank(const char *p, bool *has_newline = nullptr) {
+        if (has_newline) {
+            *has_newline = false;
+        }
         if (!p) {
             return p;
         }
         while (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t') {
+            if (*p == '\n' && has_newline) {
+                *has_newline = true;
+            }
             ++p;
         }
         return p;
@@ -94,6 +100,7 @@ protected:
         }
     }
     virtual bool is_head() const = 0;
+    virtual void as_head(bool is_head) = 0;
 }; // Interface
 
 template <Type JT, typename DT>
@@ -119,7 +126,9 @@ public:
     value_t &value() { return _value; }
     const value_t &value() const { return _value; }
 protected:
+    friend class Dict;
     bool is_head() const override { return _is_head; }
+    void as_head(bool is_head) override { _is_head = is_head; }
 protected:
     DT _value;
     bool _is_head;
@@ -220,6 +229,12 @@ protected:
         }
         return _is_head;
     }
+    void as_head(bool is_head) override {
+        if (_value) {
+            _value->as_head(is_head);
+        }
+        _is_head = is_head;
+    }
 }; // Json
 
 class Str final : public Value<Type::STR, std::string> {
@@ -239,7 +254,7 @@ public:
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz);
+        auto p = skip_blank(psz, &_is_head);
         if (*p != '"') {
             return psz;
         }
@@ -282,7 +297,7 @@ public:
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz);
+        auto p = skip_blank(psz, &_is_head);
         char *e;
         _value = std::strtold(p, &e);
         if (e != p) {
@@ -308,7 +323,7 @@ public:
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz);
+        auto p = skip_blank(psz, &_is_head);
         _base = 10;
         if (*p == '0') {
             ++p;
@@ -347,7 +362,7 @@ public:
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz);
+        auto p = skip_blank(psz, &_is_head);
         if (strncmp(p, "true", 4) == 0) {
             _value = true;
             return p + 4;
@@ -471,19 +486,25 @@ public:
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz);
+        auto p = skip_blank(psz, &_is_head);
         if (*p != '{') {
             return psz;
         }
-        p = skip_blank(p + 1);
+        _width = 0;
+        bool is_head = false;
+        unsigned width = 0;
+        p = skip_blank(p + 1, &is_head);
         while (*p) {
             if (*p == '}') {
-                return p + 1;
+                break;
             }
             Str k;
             auto e = k.loads(p);
             if (e == p) {
                 return psz;
+            }
+            if (!k.is_head()) {
+                k.as_head(is_head);
             }
             p = skip_blank(e);
             if (*p != ':') {
@@ -495,16 +516,30 @@ public:
             if (e == p) {
                 return psz;
             }
-            p = skip_blank(e);
+            v.as_head(k.is_head());
+            ++width;
+            if (v.is_head()) {
+                if (_width < width) {
+                    _width = width;
+                }
+                width = 1;
+            }
+            p = skip_blank(e, &is_head);
             if (*p == ',' || *p == '}') {
                 _value[k.value()] = std::move(v);
                 if (*p == '}') {
-                    return p + 1;
+                    break;
                 }
             } else {
                 return psz;
             }
             ++p;
+        }
+        if (*p == '}') {
+            if (_width && _width < width) {
+                _width = width;
+            }
+            return p + 1;
         }
         return psz;
     }
@@ -607,30 +642,49 @@ public:
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz);
+        auto p = skip_blank(psz, &_is_head);
         if (*p != '[') {
             return psz;
         }
-        p = skip_blank(p + 1);
+        _width = 0;
+        bool is_head = false;
+        unsigned width = 0;
+        p = skip_blank(p + 1, &is_head);
         while (*p) {
             if (*p == ']') {
-                return p + 1;
+                break;
             }
             Json v;
             auto e = v.loads(p);
             if (e == p) {
                 return psz;
             }
-            p = skip_blank(e);
+            if (!v.is_head()) {
+                v.as_head(is_head);
+            }
+            ++width;
+            if (v.is_head()) {
+                if (_width < width) {
+                    _width = width;
+                }
+                width = 1;
+            }
+            p = skip_blank(e, &is_head);
             if (*p == ',' || *p == ']') {
                 append(std::move(v));
                 if (*p == ']') {
-                    return p + 1;
+                    break;
                 }
             } else {
                 return psz;
             }
             ++p;
+        }
+        if (*p == ']') {
+            if (_width && _width < width) {
+                _width = width;
+            }
+            return p + 1;
         }
         return psz;
     }
