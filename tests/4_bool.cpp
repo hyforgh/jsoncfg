@@ -84,13 +84,23 @@ TEST_CASE("Bool") {
         CHECK(j.as<jsoncfg::Dec>() == pi);
     }
 
-    SECTION("Json<Bool>::to<Int>()") {
+    SECTION("Json<Bool>::to<Uint>()") {
         CHECK(j.as<jsoncfg::Bool>());
         CHECK(j.as<jsoncfg::Bool>()->value() == true);
-        auto pi = j.to<jsoncfg::Int>();
+        auto pi = j.to<jsoncfg::Uint>();
         CHECK(pi);
         CHECK(pi->value() == 1);
-        CHECK(j.as<jsoncfg::Int>());
-        CHECK(j.as<jsoncfg::Int>() == pi);
+        CHECK(j.as<jsoncfg::Uint>());
+        CHECK(j.as<jsoncfg::Uint>() == pi);
+    }
+
+    SECTION("Json<Bool>::to<Sint>()") {
+        CHECK(j.as<jsoncfg::Bool>());
+        CHECK(j.as<jsoncfg::Bool>()->value() == true);
+        auto pi = j.to<jsoncfg::Sint>();
+        CHECK(pi);
+        CHECK(pi->value() == 1);
+        CHECK(j.as<jsoncfg::Sint>());
+        CHECK(j.as<jsoncfg::Sint>() == pi);
     }
 }

@@ -15,7 +15,7 @@ TEST_CASE("Dec") {
     }
 
     v.loads("7.8");
-    SECTION("Int::loads(float)") {
+    SECTION("Dec::loads(float)") {
         CHECK(v.value() == Approx(7.8).margin(1e-6));
     }
 
@@ -62,14 +62,24 @@ TEST_CASE("Dec") {
         CHECK(j.as<jsoncfg::Str>() == pi);
     }
 
-    SECTION("Json<Dec>::to<Int>()") {
+    SECTION("Json<Dec>::to<Uint>()") {
         CHECK(j.as<jsoncfg::Dec>());
         CHECK(j.as<jsoncfg::Dec>()->value() == Approx(123.5).margin(1e-6));
-        auto pi = j.to<jsoncfg::Int>();
+        auto pi = j.to<jsoncfg::Uint>();
         CHECK(pi);
-        CHECK(pi->value() == static_cast<jsoncfg::Int::value_t>(123.5));
-        CHECK(j.as<jsoncfg::Int>());
-        CHECK(j.as<jsoncfg::Int>() == pi);
+        CHECK(pi->value() == static_cast<jsoncfg::Uint::value_t>(123.5));
+        CHECK(j.as<jsoncfg::Uint>());
+        CHECK(j.as<jsoncfg::Uint>() == pi);
+    }
+
+    SECTION("Json<Dec>::to<Sint>()") {
+        CHECK(j.as<jsoncfg::Dec>());
+        CHECK(j.as<jsoncfg::Dec>()->value() == Approx(123.5).margin(1e-6));
+        auto pi = j.to<jsoncfg::Sint>();
+        CHECK(pi);
+        CHECK(pi->value() == static_cast<jsoncfg::Sint::value_t>(123.5));
+        CHECK(j.as<jsoncfg::Sint>());
+        CHECK(j.as<jsoncfg::Sint>() == pi);
     }
 
     SECTION("Json<Dec>::to<Bool>() true") {

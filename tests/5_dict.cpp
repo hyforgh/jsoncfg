@@ -16,18 +16,18 @@ TEST_CASE("Dict") {
     v.loads("{\"bool\":true,\"dict\":{\"a\":97},\"float\":5.2,\"int\":9,\"list\":[99,100],\"str\":\"world\"}");
     SECTION("Dict::loads({})") {
         CHECK(v.get("bool").as<jsoncfg::Bool>()->value() == true);
-        CHECK(v.get("dict").as<jsoncfg::Dict>()->get("a").as<jsoncfg::Int>()->value() == 97);
+        CHECK(v.get("dict").as<jsoncfg::Dict>()->get("a").as<jsoncfg::Uint>()->value() == 97);
         CHECK(v.get("float").as<jsoncfg::Dec>()->value() == Approx(5.2).margin(1e-6));
-        CHECK(v.get("int").as<jsoncfg::Int>()->value() == 9);
+        CHECK(v.get("int").as<jsoncfg::Uint>()->value() == 9);
         CHECK(v.get("list").as<jsoncfg::List>());
         CHECK(v.get("str").as<jsoncfg::Str>()->value() == "world");
     }
 
     SECTION("Dict::set()") {
         CHECK(v.set("bool", false).get("bool").as<jsoncfg::Bool>()->value() == false);
-        CHECK(v.get("dict").as<jsoncfg::Dict>()->set("a", 100).get("a").as<jsoncfg::Int>()->value() == 100);
+        CHECK(v.get("dict").as<jsoncfg::Dict>()->set("a", 100).get("a").as<jsoncfg::Sint>()->value() == 100);
         CHECK(v.set("float", 6.0).get("float").as<jsoncfg::Dec>()->value() == Approx(6).margin(1e-6));
-        CHECK(v.set("int", 10).get("int").as<jsoncfg::Int>()->value() == 10);
+        CHECK(v.set("int", 10).get("int").as<jsoncfg::Sint>()->value() == 10);
         CHECK(v.set("list", jsoncfg::List({1, 2, 3})).get("list").as<jsoncfg::List>()->vector<int>(0) == std::vector<int> {1, 2, 3});
         CHECK(v.set("str", "json").get("str").as<std::string>()->value() == "json");
         v.get("list").as<jsoncfg::List>()->get(1).as<int>()->value() = 5;

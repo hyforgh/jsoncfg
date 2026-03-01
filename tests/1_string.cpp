@@ -2,7 +2,7 @@
 
 TEST_CASE("Str") {
     auto v = jsoncfg::Str("hello");
-    SECTION("Int::dumps()") {
+    SECTION("Str::dumps()") {
         CHECK(v.value() == "hello");
         CHECK(v == "hello");
         CHECK(v.dumps() == "\"hello\"");
@@ -40,11 +40,13 @@ TEST_CASE("Str") {
         CHECK(jt->value() == "std::string");
     }
 
-    j = jsoncfg::Int(123);
-    SECTION("Json<Str> = Int") {
+    j = jsoncfg::Sint(123);
+    SECTION("Json<Str> = __Int") {
         CHECK(!j.as<jsoncfg::Str>());
-        CHECK(j.as<jsoncfg::Int>());
-        CHECK(j.as<jsoncfg::Int>()->value() == 123);
+        CHECK(j.as<jsoncfg::Uint>());
+        CHECK(j.as<jsoncfg::Uint>()->value() == 123);
+        CHECK(j.as<jsoncfg::Sint>());
+        CHECK(j.as<jsoncfg::Sint>()->value() == 123);
     }
 
     j.to<jsoncfg::Str>();
@@ -58,14 +60,19 @@ TEST_CASE("Str") {
         CHECK(j.as<jsoncfg::Dec>() == pi);
     }
 
-    SECTION("Json<Str>::to<Int>() success") {
+    SECTION("Json<Str>::to<__Int>() success") {
         CHECK(j.as<jsoncfg::Str>());
         CHECK(j.as<jsoncfg::Str>()->value() == "123");
-        auto pi = j.to<jsoncfg::Int>();
+        auto pi = j.to<jsoncfg::Sint>();
         CHECK(pi);
         CHECK(pi->value() == 123);
-        CHECK(j.as<jsoncfg::Int>());
-        CHECK(j.as<jsoncfg::Int>() == pi);
+        CHECK(j.as<jsoncfg::Sint>());
+        CHECK(j.as<jsoncfg::Sint>() == pi);
+        auto pu = j.to<jsoncfg::Uint>();
+        CHECK(pu);
+        CHECK(pu->value() == 123);
+        CHECK(j.as<jsoncfg::Uint>());
+        CHECK(j.as<jsoncfg::Uint>() == pi);
     }
 
     SECTION("Json<Str>::to<Bool>() success") {
@@ -79,10 +86,11 @@ TEST_CASE("Str") {
     }
 
     j = jsoncfg::Str("i7");
-    SECTION("Json<Str>::to<Int>() failed") {
+    SECTION("Json<Str>::to<__Int>() failed") {
         CHECK(j.as<jsoncfg::Str>());
         CHECK(j.as<jsoncfg::Str>()->value() == "i7");
-        CHECK(!j.to<jsoncfg::Int>());
+        CHECK(!j.to<jsoncfg::Uint>());
+        CHECK(!j.to<jsoncfg::Sint>());
         CHECK(!j.as<jsoncfg::Str>());
         CHECK(!j.value());
     }
