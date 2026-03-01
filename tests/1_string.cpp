@@ -41,7 +41,7 @@ TEST_CASE("Str") {
     }
 
     j = jsoncfg::Sint(123);
-    SECTION("Json<Str> = __Int") {
+    SECTION("Json<Str> = Int") {
         CHECK(!j.as<jsoncfg::Str>());
         CHECK(j.as<jsoncfg::Uint>());
         CHECK(j.as<jsoncfg::Uint>()->value() == 123);
@@ -60,7 +60,7 @@ TEST_CASE("Str") {
         CHECK(j.as<jsoncfg::Dec>() == pi);
     }
 
-    SECTION("Json<Str>::to<__Int>() success") {
+    SECTION("Json<Str>::to<Int>() success") {
         CHECK(j.as<jsoncfg::Str>());
         CHECK(j.as<jsoncfg::Str>()->value() == "123");
         auto pi = j.to<jsoncfg::Sint>();
@@ -86,7 +86,7 @@ TEST_CASE("Str") {
     }
 
     j = jsoncfg::Str("i7");
-    SECTION("Json<Str>::to<__Int>() failed") {
+    SECTION("Json<Str>::to<Int>() failed") {
         CHECK(j.as<jsoncfg::Str>());
         CHECK(j.as<jsoncfg::Str>()->value() == "i7");
         CHECK(!j.to<jsoncfg::Uint>());

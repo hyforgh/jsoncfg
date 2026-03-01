@@ -54,9 +54,9 @@ enum class Type {
     COUNT
 }; // Type
 
-class __Interface : public std::enable_shared_from_this<__Interface> {
+class Interface : public std::enable_shared_from_this<Interface> {
 public:
-    virtual ~__Interface() {}
+    virtual ~Interface() {}
     virtual Type type() const = 0;
     virtual void dumps(std::ostream &os
             , unsigned indent = 0, bool keep_layout = false) const {
@@ -89,6 +89,8 @@ public:
         }
         return p;
     }
+    virtual bool is_head() const = 0;
+    virtual void as_head(bool is_head) = 0;
 protected:
     friend class Json;
     virtual void dumps_depth(std::ostream &os
@@ -99,34 +101,30 @@ protected:
             os << " ";
         }
     }
-    virtual bool is_head() const = 0;
-    virtual void as_head(bool is_head) = 0;
-}; // __Interface
+}; // Interface
 
 template <Type JT, typename DT>
-class __Value : public __Interface {
+class Value : public Interface {
 public:
     enum { TYPE = static_cast<int>(JT) };
     typedef DT value_t;
 public:
-    virtual ~__Value() {}
-    __Value(value_t v, bool is_head = false)
+    virtual ~Value() {}
+    Value(value_t v, bool is_head = false)
         : _value(std::move(v)), _is_head(is_head) {}
-    __Value &operator = (value_t v) {
+    Value &operator = (value_t v) {
         _value = std::move(v);
         return *this;
     }
     bool operator == (const value_t &v) const {
         return _value == v;
     }
-    bool operator == (const __Value &v) const {
+    bool operator == (const Value &v) const {
         return _value == v._value;
     }
     Type type() const override { return JT; }
     value_t &value() { return _value; }
     const value_t &value() const { return _value; }
-protected:
-    friend class Dict;
     bool is_head() const override { return _is_head; }
     void as_head(bool is_head) override { _is_head = is_head; }
 protected:
@@ -134,7 +132,7 @@ protected:
     char _is_head;
 };
 template <Type JT, typename DT>
-bool operator == (const DT &v, const __Value<JT, DT> &obj) {
+bool operator == (const DT &v, const Value<JT, DT> &obj) {
     return obj == v;
 }
 
@@ -183,46 +181,16 @@ public:
 
 template <typename DT>
 struct __dt_2_jt { typedef DT type; };
-class Json final : public __Value<Type::JSON, std::shared_ptr<__Interface>> {
+class Json final : public Value<Type::JSON, std::shared_ptr<Interface>> {
 public:
-    using __Interface::loads;
+    using Interface::loads;
 public:
-    Json() : __Value(nullptr) {}
+    Json() : Value(nullptr) {}
     template <typename T>
     Json(T v);
     template <typename T>
     Json &operator = (T v);
-    void dumps_depth(std::ostream &os
-            , unsigned indent, bool keep_layout, unsigned depth) const override {
-        if (_value) {
-            _value->dumps_depth(os, indent, keep_layout, depth);
-        } else {
-            os << "null";
-        }
-    }
     const char *loads(const char *psz) override;
-    template <typename T>
-    JsonT<typename __dt_2_jt<T>::type> as() {
-        return as<T>(_value);
-    }
-    template <typename T>
-    JsonT<typename __dt_2_jt<T>::type> to() {
-        auto v = to<T>(_value);
-        _value = v;
-        return v;
-    }
-public:
-    template <typename T>
-    static std::shared_ptr<typename __dt_2_jt<T>::type> as(std::shared_ptr<__Interface> v) {
-        static_assert(std::is_base_of<__Interface, typename __dt_2_jt<T>::type>::value,
-            "Json::as<T>() : not supported type");
-        return nullptr;
-    }
-    template <typename T>
-    static std::shared_ptr<typename __dt_2_jt<T>::type> to(std::shared_ptr<__Interface> v);
-protected:
-    friend class Dict;
-    friend class List;
     bool is_head() const override {
         if (_value) {
             return _value->is_head();
@@ -235,20 +203,46 @@ protected:
         }
         _is_head = is_head;
     }
+    template <typename T>
+    JsonT<typename __dt_2_jt<T>::type> as() {
+        return as<T>(_value);
+    }
+    template <typename T>
+    JsonT<typename __dt_2_jt<T>::type> to() {
+        auto v = to<T>(_value);
+        _value = v;
+        return v;
+    }
+public:
+    template <typename T>
+    static std::shared_ptr<typename __dt_2_jt<T>::type> as(std::shared_ptr<Interface> v) {
+        static_assert(std::is_base_of<Interface, typename __dt_2_jt<T>::type>::value,
+            "Json::as<T>() : not supported type");
+        return nullptr;
+    }
+    template <typename T>
+    static std::shared_ptr<typename __dt_2_jt<T>::type> to(std::shared_ptr<Interface> v);
+protected:
+    friend class Dict;
+    friend class List;
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
+        if (_value) {
+            _value->dumps_depth(os, indent, keep_layout, depth);
+        } else {
+            os << "null";
+        }
+    }
 }; // Json
 
-class Str final : public __Value<Type::STR, std::string> {
+class Str final : public Value<Type::STR, std::string> {
 public:
-    using __Interface::loads;
+    using Interface::loads;
 public:
-    Str(value_t v = "", bool is_head = false) : __Value(std::move(v), is_head) {}
+    Str(value_t v = "", bool is_head = false) : Value(std::move(v), is_head) {}
     Str &operator = (const char *v) {
         _value = v;
         return *this;
-    }
-    void dumps_depth(std::ostream &os
-            , unsigned indent, bool keep_layout, unsigned depth) const override {
-        os << "\"" << _value << "\"";
     }
     const char *loads(const char *psz) override {
         if (!psz) {
@@ -269,6 +263,11 @@ public:
         }
         return psz;
     }
+protected:
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
+        os << "\"" << _value << "\"";
+    }
 }; // Str
 
 template <>
@@ -283,61 +282,78 @@ public:
     }
 };
 
-class Dec final : public __Value<Type::DEC, double> {
+class Dec final : public Value<Type::DEC, double> {
 public:
-    using __Interface::loads;
+    using Interface::loads;
 public:
-    Dec(value_t v = 0, unsigned scientific_notation = false, bool is_head = false)
-        : __Value(v, is_head), _scientific_notation(scientific_notation) {}
-    void dumps_depth(std::ostream &os
-            , unsigned indent, bool keep_layout, unsigned depth) const override {
-        os << _value;
-    }
+    Dec(value_t v = 0, bool scientific = false, bool is_head = false)
+        : Value(v, is_head), _scientific(scientific) {}
     const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
+        _scientific = false;
         auto p = skip_blank(psz, &_is_head);
         char *e;
         _value = std::strtold(p, &e);
         if (e != p) {
+            auto q = e;
+            while (q != p) {
+                if (*q == 'e' || *q == 'E') {
+                    _scientific = true;
+                    break;
+                }
+                --q;
+            }
             return e;
         }
         return psz;
     }
-private:
-    bool _scientific_notation;
-}; // Dec
-
-class __Int : public __Interface {
-public:
-    enum { TYPE = static_cast<int>(Type::INT) };
-    using __Interface::loads;
-public:
-    __Int(bool is_head = false)
-        : _base(10), _is_head(is_head), _is_signed(1), _value{0} {
-    }
-    __Int(unsigned long long v, unsigned base = 10, bool is_head = false)
-            : _base(base), _is_head(is_head), _is_signed(0) {
-        _value.u = v;
-    }
-    __Int(long long v, bool is_head = false)
-            : _base(10), _is_head(is_head), _is_signed(1) {
-        _value.s = v;
-    }
+    bool scientific() const { return _scientific; }
+    void scientific(bool is) { _scientific = is; }
+protected:
     void dumps_depth(std::ostream &os
             , unsigned indent, bool keep_layout, unsigned depth) const override {
-        if (_is_signed) {
-            os << _value.s;
-        } else {
-            os << _value.u;
+        auto os_flags = os.flags();
+        if (_scientific) {
+            os.flags(os_flags | std::ios_base::scientific);
         }
+        os << _value;
+        os.flags(os_flags);
+    }
+private:
+    bool _scientific;
+}; // Dec
+
+union __int_value_t {
+    unsigned long long u;
+    long long s;
+};
+class Int : public Value<Type::INT, __int_value_t> {
+public:
+    using Interface::loads;
+public:
+    Int(bool is_head = false)
+            : Value({0}, is_head), _is_signed(0), _base(10) {
+    }
+    Int(unsigned long long v, unsigned base = 10, bool is_head = false)
+            : Value({0}, is_head), _is_signed(0) {
+        _value.u = v;
+        this->base(base);
+    }
+    Int(long long v, bool is_head = false)
+            : Value({0}, is_head), _is_signed(1), _base(10) {
+        _value.s = v;
     }
     const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
         auto p = skip_blank(psz, &_is_head);
+        if (*p == '-') {
+            _is_signed = 1;
+            p = skip_blank(p + 1);
+        }
         char *e;
         _base = 10;
         if (*p == '0') {
@@ -352,43 +368,69 @@ public:
             if (_base != 10) {
                 ++p;
             }
-            _value.u = std::strtoull(p, &e, _base);
-        } else if (*p == '-') {
-            _is_signed = 1;
-            _value.s = std::strtoll(p, &e, _base);
-        } else {
-            _value.u = std::strtoull(p, &e, _base);
         }
+        _value.u = std::strtoull(p, &e, _base);
         if (e != p) {
             return e;
         }
+        if (_is_signed) {
+            _value.s = -_value.s;
+        }
         return psz;
     }
-    bool operator == (const __Int &v) const {
-        return _value.u == v._value.u;
-    }
-    Type type() const override { return static_cast<Type>(TYPE); }
     bool is_signed() const { return _is_signed; }
+    unsigned base() const { return _base; }
+    void base(unsigned b) {
+        _base = b;
+        if (_base != 16 && _base != 8 && _base != 2) {
+            _base = 10;
+        }
+    }
+    template <typename Tint>
+    Tint &as() {
+        return static_cast<Tint &>(*this);
+    }
+    template <typename Tint>
+    const Tint &as() const {
+        return static_cast<const Tint &>(*this);
+    }
 protected:
-    friend class Dict;
-    bool is_head() const override { return _is_head; }
-    void as_head(bool is_head) override { _is_head = is_head; }
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
+        unsigned long long v = _value.u;
+        if (_is_signed && _value.s < 0) {
+            v = -_value.s;
+            os << "-";
+        }
+        switch (_base) {
+        case 2: os << "0b"; break;
+        case 8: os << "0o"; break;
+        case 16: os << "0x"; break;
+        default: os << v; return;
+        }
+        std::vector<int> items; items.reserve(64);
+        while (v) {
+            items.push_back(v % _base);
+            v /= _base;
+        }
+        for (auto it = items.rbegin(); it != items.rend(); ++it) {
+            if (*it > 9) {
+                os << (*it - 10 + 'A');
+            }
+            os << *it;
+        }
+    }
 protected:
-    short _base;
-    char _is_head;
     char _is_signed;
-    union {
-        unsigned long long u;
-        long long s;
-    } _value;
-}; // __Int
+    char _base;
+}; // Int
 
-class Uint final : public __Int {
+class Uint final : public Int {
 public:
     typedef unsigned long long value_t;
 public:
     Uint(value_t v = 0, unsigned base = 10, bool is_head = false)
-        : __Int(v, base, is_head) {}
+        : Int(v, base, is_head) {}
     bool operator == (const value_t &v) const {
         return _value.u == v;
     }
@@ -396,12 +438,12 @@ public:
     const value_t &value() const { return _value.u; }
 }; // Uint
 
-class Sint final : public __Int {
+class Sint final : public Int {
 public:
     typedef long long value_t;
 public:
     Sint(value_t v = 0, bool is_head = false)
-        : __Int(v, is_head) {}
+        : Int(v, is_head) {}
     bool operator == (const value_t &v) const {
         return _value.s == v;
     }
@@ -409,15 +451,11 @@ public:
     const value_t &value() const { return _value.s; }
 }; // Sint
 
-class Bool final : public __Value<Type::BOOL, bool> {
+class Bool final : public Value<Type::BOOL, bool> {
 public:
-    using __Interface::loads;
+    using Interface::loads;
 public:
-    Bool(value_t v = false, bool is_head = false) : __Value(v, is_head) {}
-    void dumps_depth(std::ostream &os
-            , unsigned indent, bool keep_layout, unsigned depth) const override {
-        os << (_value ? "true" : "false");
-    }
+    Bool(value_t v = false, bool is_head = false) : Value(v, is_head) {}
     const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
@@ -431,6 +469,11 @@ public:
             return p + 5;
         }
         return psz;
+    }
+protected:
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
+        os << (_value ? "true" : "false");
     }
 }; // Bool
 
@@ -496,51 +539,16 @@ private:
     list_t _list;
     dict_t _dict;
 };
-class Dict final : public __Value<Type::DICT, OrderedDict<std::string, Json>> {
+class Dict final : public Value<Type::DICT, OrderedDict<std::string, Json>> {
 public:
-    using __Interface::loads;
+    using Interface::loads;
     typedef value_t::iterator iterator;
     typedef value_t::const_iterator const_iterator;
     typedef value_t::reverse_iterator reverse_iterator;
     typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
     Dict(value_t v = {}, unsigned items_per_line = 1, bool is_head = false)
-        : __Value(std::move(v), is_head), _width(items_per_line) {}
-    void dumps_depth(std::ostream &os
-            , unsigned indent, bool keep_layout, unsigned depth) const override {
-        os << "{";
-        unsigned width = 0;
-        bool is_first = true;
-        for (auto &it : _value) {
-            if (!is_first) {
-                os << ",";
-            }
-            if (indent) {
-                if (keep_layout) {
-                    ++width;
-                    if ((is_first && _width) || it.second.is_head() || (_width && width >= _width)) {
-                        dumps_head_indent(os, indent, depth + 1);
-                        width = 0;
-                    }
-                } else {
-                    dumps_head_indent(os, indent, depth + 1);
-                }
-            }
-            if (!is_first && width) {
-                os << " ";
-            }
-            os << "\"" << it.first << "\":";
-            if (indent) {
-                os << " ";
-            }
-            it.second.dumps_depth(os, indent, keep_layout, depth + 1);
-            is_first = false;
-        }
-        if (indent && (!keep_layout || _width)) {
-            dumps_head_indent(os, indent, depth);
-        }
-        os << "}";
-    }
+        : Value(std::move(v), is_head), _width(items_per_line) {}
     const char *loads(const char *psz) override {
         _value.clear();
         if (!psz) {
@@ -637,6 +645,42 @@ public:
     const_reverse_iterator rbegin() const { return _value.rbegin(); }
     const_reverse_iterator rend() const { return _value.rend(); }
 protected:
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
+        os << "{";
+        unsigned width = 0;
+        bool is_first = true;
+        for (auto &it : _value) {
+            if (!is_first) {
+                os << ",";
+            }
+            if (indent) {
+                if (keep_layout) {
+                    ++width;
+                    if ((is_first && _width) || it.second.is_head() || (_width && width >= _width)) {
+                        dumps_head_indent(os, indent, depth + 1);
+                        width = 0;
+                    }
+                } else {
+                    dumps_head_indent(os, indent, depth + 1);
+                }
+            }
+            if (!is_first && width) {
+                os << " ";
+            }
+            os << "\"" << it.first << "\":";
+            if (indent) {
+                os << " ";
+            }
+            it.second.dumps_depth(os, indent, keep_layout, depth + 1);
+            is_first = false;
+        }
+        if (indent && (!keep_layout || _width)) {
+            dumps_head_indent(os, indent, depth);
+        }
+        os << "}";
+    }
+protected:
     unsigned _width;
 }; // Dict
 
@@ -656,47 +700,16 @@ public:
     }
 };
 
-class List final : public __Value<Type::LIST, std::list<Json>> {
+class List final : public Value<Type::LIST, std::list<Json>> {
 public:
-    using __Interface::loads;
+    using Interface::loads;
     typedef value_t::iterator iterator;
     typedef value_t::const_iterator const_iterator;
     typedef value_t::reverse_iterator reverse_iterator;
     typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
     List(value_t v = {}, unsigned items_per_line = 1, bool is_head = false)
-        : __Value(std::move(v), is_head), _width(items_per_line) {}
-    void dumps_depth(std::ostream &os
-            , unsigned indent, bool keep_layout, unsigned depth) const override {
-        os << "[";
-        unsigned width = 0;
-        bool is_first = true;
-        for (auto &it : _value) {
-            if (!is_first) {
-                os << ",";
-            }
-            if (indent) {
-                if (keep_layout) {
-                    ++width;
-                    if ((is_first && _width) || it.is_head() || (_width && width >= _width)) {
-                        dumps_head_indent(os, indent, depth + 1);
-                        width = 0;
-                    }
-                } else {
-                    dumps_head_indent(os, indent, depth + 1);
-                }
-            }
-            if (!is_first && width) {
-                os << " ";
-            }
-            it.dumps_depth(os, indent, keep_layout, depth + 1);
-            is_first = false;
-        }
-        if (indent && (!keep_layout || _width)) {
-            dumps_head_indent(os, indent, depth);
-        }
-        os << "]";
-    }
+        : Value(std::move(v), is_head), _width(items_per_line) {}
     const char *loads(const char *psz) override {
         _value.clear();
         if (!psz) {
@@ -752,17 +765,17 @@ public:
         _value.emplace_back(std::move(v));
         return *this;
     }
-    List &insert(unsigned i, Json v) {
+    List &insert(int i, Json v) {
         _value.emplace(iterator_at(i), std::move(v));
         return *this;
     }
-    Json &get(unsigned i) {
+    Json &get(int i) {
         return *iterator_at(i);
     }
-    const Json &get(unsigned i) const {
+    const Json &get(int i) const {
         return *iterator_at(i);
     }
-    List &set(unsigned i, Json v) {
+    List &set(int i, Json v) {
         auto it = iterator_at(i);
         *it = std::move(v);
         return *this;
@@ -797,11 +810,45 @@ public:
     reverse_iterator rend() { return _value.rend(); }
     const_reverse_iterator rbegin() const { return _value.rbegin(); }
     const_reverse_iterator rend() const { return _value.rend(); }
+protected:
+    void dumps_depth(std::ostream &os
+            , unsigned indent, bool keep_layout, unsigned depth) const override {
+        os << "[";
+        unsigned width = 0;
+        bool is_first = true;
+        for (auto &it : _value) {
+            if (!is_first) {
+                os << ",";
+            }
+            if (indent) {
+                if (keep_layout) {
+                    ++width;
+                    if ((is_first && _width) || it.is_head() || (_width && width >= _width)) {
+                        dumps_head_indent(os, indent, depth + 1);
+                        width = 0;
+                    }
+                } else {
+                    dumps_head_indent(os, indent, depth + 1);
+                }
+            }
+            if (!is_first && width) {
+                os << " ";
+            }
+            it.dumps_depth(os, indent, keep_layout, depth + 1);
+            is_first = false;
+        }
+        if (indent && (!keep_layout || _width)) {
+            dumps_head_indent(os, indent, depth);
+        }
+        os << "]";
+    }
 private:
-    iterator iterator_at(unsigned i) {
+    iterator iterator_at(int i) {
 #define ITERATOR_AT()               \
-        auto n = _value.size();     \
-        if (i >= n) {               \
+        int n = _value.size();      \
+        if (i < 0) {                \
+            i += n;                 \
+        } else if (i >= n) {        \
             return _value.end();    \
         }                           \
         if (2 * i > n) {            \
@@ -815,7 +862,7 @@ private:
         return it;
         ITERATOR_AT();
     }
-    const_iterator iterator_at(unsigned i) const {
+    const_iterator iterator_at(int i) const {
         ITERATOR_AT();
 #undef ITERATOR_AT
     }
@@ -833,24 +880,24 @@ public:
 public:
     JsonT(std::shared_ptr<List> v = std::make_shared<List>())
         : __Agent<List>(std::move(v)) {}
-    Json &operator [] (unsigned i) {
+    Json &operator [] (int i) {
         return _value->get(i);
     }
 };
 
 #define CASE_JSON_TYPE(JT)                          \
 template <> Json::Json(JT v)                        \
-    : __Value(std::make_shared<JT>(std::move(v))) { \
+    : Value(std::make_shared<JT>(std::move(v))) { \
 }                                                   \
 template <> Json::Json(JsonT<typename __dt_2_jt<JT>::type> v) \
-    : __Value(v.agent()) {                                    \
+    : Value(v.agent()) {                                    \
 }                                                             \
 template <> Json &Json::operator = (std::remove_const<JT>::type v) { \
     _value = std::make_shared<JT>(std::move(v));                     \
     return *this;                                                    \
 }                                                                                            \
 template <>                                                                                  \
-std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>(std::shared_ptr<__Interface> v) { \
+std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>(std::shared_ptr<Interface> v) { \
     if (!v || v->type() != static_cast<Type>(JT::TYPE)) {                                    \
         return nullptr;                                                                      \
     }                                                                                        \
@@ -865,21 +912,21 @@ CASE_JSON_TYPE(Dict)
 CASE_JSON_TYPE(List)
 #undef CASE_JSON_TYPE
 template <>
-std::shared_ptr<typename __dt_2_jt<__Int>::type> Json::as<__Int>(
-        std::shared_ptr<__Interface> v) {
-    if (!v || v->type() != static_cast<Type>(__Int::TYPE)) {
+std::shared_ptr<typename __dt_2_jt<Int>::type> Json::as<Int>(
+        std::shared_ptr<Interface> v) {
+    if (!v || v->type() != static_cast<Type>(Int::TYPE)) {
         return nullptr;
     }
-    return std::static_pointer_cast<__Int>(v->shared_from_this());
+    return std::static_pointer_cast<Int>(v->shared_from_this());
 }
 
 #define CASE_DATA_TYPE(JT, DT)                      \
 template <> Json::Json(DT v)                        \
-    : __Value(std::make_shared<JT>(std::move(v))) { \
+    : Value(std::make_shared<JT>(std::move(v))) { \
 }                                                                  \
 template <> struct __dt_2_jt<DT> { typedef JT type; };             \
 template <>                                                        \
-std::shared_ptr<JT> Json::as<DT>(std::shared_ptr<__Interface> v) { \
+std::shared_ptr<JT> Json::as<DT>(std::shared_ptr<Interface> v) { \
     if (!v || v->type() != static_cast<Type>(JT::TYPE)) {          \
         return nullptr;                                            \
     }                                                              \
@@ -916,7 +963,7 @@ const char *Json::loads(const char *psz) {
     CASE_JSON_TYPE(Bool)
     CASE_JSON_TYPE(Str)
     {
-        _value = std::make_shared<__Int>();
+        _value = std::make_shared<Int>();
         auto e = _value->loads(psz);
         if (e != psz) {
             if (*e == '.') {
@@ -939,8 +986,8 @@ const char *Json::loads(const char *psz) {
 template <typename Tto, typename Tfrom>
 struct __cast {
     static std::shared_ptr<Tto> cast(const Tfrom &v) {
-        static_assert(std::is_base_of<__Interface, Tto>::value \
-                && std::is_base_of<__Interface,  Tfrom>::value,
+        static_assert(std::is_base_of<Interface, Tto>::value \
+                && std::is_base_of<Interface,  Tfrom>::value,
             "jsoncfg::__cast is only applicable to jonsho types");
         return nullptr;
     }
@@ -948,7 +995,7 @@ struct __cast {
 template <typename Tto>
 struct __cast<Tto, Str> {
     static std::shared_ptr<Tto> cast(const Str &v) {
-        static_assert(std::is_base_of<__Interface, Tto>::value,
+        static_assert(std::is_base_of<Interface, Tto>::value,
             "jsoncfg::__cast is only applicable to jonsho types");
         auto data = std::make_shared<Tto>();
         auto p = v.value().c_str();
@@ -961,7 +1008,7 @@ struct __cast<Tto, Str> {
 template <typename Tfrom>
 struct __cast<Str, Tfrom> {
     static std::shared_ptr<Str> cast(const Tfrom &v) {
-        static_assert(std::is_base_of<__Interface, Tfrom>::value,
+        static_assert(std::is_base_of<Interface, Tfrom>::value,
             "jsoncfg::__cast is only applicable to jonsho types");
         return std::make_shared<Str>(v.dumps());
     }
@@ -969,7 +1016,7 @@ struct __cast<Str, Tfrom> {
 template <typename Tfrom>
 struct __cast<Bool, Tfrom> {
     static std::shared_ptr<Bool> cast(const Tfrom &v) {
-        static_assert(std::is_base_of<__Interface, Tfrom>::value,
+        static_assert(std::is_base_of<Interface, Tfrom>::value,
             "jsoncfg::__cast is only applicable to jonsho types");
         auto data = std::make_shared<Bool>(true);
         auto s = v.dumps();
@@ -994,16 +1041,16 @@ struct __cast<Bool, Str> {
         return std::make_shared<Bool>(bv);
     }
 };
-template <> struct __cast<Dec, __Int> {
-    static std::shared_ptr<Dec> cast(const __Int &v) {
+template <> struct __cast<Dec, Int> {
+    static std::shared_ptr<Dec> cast(const Int &v) {
         if (v.is_signed()) {
             return std::make_shared<Dec>(static_cast<const Sint &>(v).value());
         }
         return std::make_shared<Dec>(static_cast<const Uint &>(v).value());
     }
 };
-template <> struct __cast<__Int, Dec> {
-    static std::shared_ptr<__Int> cast(const Dec &v) {
+template <> struct __cast<Int, Dec> {
+    static std::shared_ptr<Int> cast(const Dec &v) {
         if (v.value() < 0) {
             return std::make_shared<Sint>(v.value());
         }
@@ -1012,21 +1059,21 @@ template <> struct __cast<__Int, Dec> {
 };
 template <> struct __cast<Uint, Dec> {
     static std::shared_ptr<Uint> cast(const Dec &v) {
-        return std::static_pointer_cast<Uint>(__cast<__Int, Dec>::cast(v));
+        return std::static_pointer_cast<Uint>(__cast<Int, Dec>::cast(v));
     }
 };
 template <> struct __cast<Sint, Dec> {
     static std::shared_ptr<Sint> cast(const Dec &v) {
-        return std::static_pointer_cast<Sint>(__cast<__Int, Dec>::cast(v));
+        return std::static_pointer_cast<Sint>(__cast<Int, Dec>::cast(v));
     }
 };
-template <> struct __cast<Bool, __Int> {
-    static std::shared_ptr<Bool> cast(const __Int &v) {
+template <> struct __cast<Bool, Int> {
+    static std::shared_ptr<Bool> cast(const Int &v) {
         return std::make_shared<Bool>(static_cast<const Uint &>(v).value());
     }
 };
-template <> struct __cast<__Int, Bool> {
-    static std::shared_ptr<__Int> cast(const Bool &v) {
+template <> struct __cast<Int, Bool> {
+    static std::shared_ptr<Int> cast(const Bool &v) {
         return std::make_shared<Uint>(v.value());
     }
 };
@@ -1049,16 +1096,16 @@ CASE_JSON_CAST_NUMBERIC(Bool, Sint)
 #undef CASE_JSON_CAST_NUMBERIC
 
 template <typename DT> 
-std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<__Interface> v) {
+std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface> v) {
     typedef typename __dt_2_jt<DT>::type JT;
-    static_assert(std::is_base_of<__Interface, JT>::value, "unsupported type");
+    static_assert(std::is_base_of<Interface, JT>::value, "unsupported type");
     if (!v || v->type() == static_cast<Type>(JT::TYPE)) {
         return as<JT>(v);
     }
     switch (v->type()) {
     case Type::STR: v = __cast<JT, Str>::cast(*as<Str>(v)); break;
     case Type::DEC: v = __cast<JT, Dec>::cast(*as<Dec>(v)); break;
-    case Type::INT: v = __cast<JT, __Int>::cast(*as<__Int>(v)); break;
+    case Type::INT: v = __cast<JT, Int>::cast(*as<Int>(v)); break;
     case Type::BOOL: v = __cast<JT, Bool>::cast(*as<Bool>(v)); break;
     case Type::DICT: v = __cast<JT, Dict>::cast(*as<Dict>(v)); break;
     case Type::LIST: v = __cast<JT, List>::cast(*as<List>(v)); break;
