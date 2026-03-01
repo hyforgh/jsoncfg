@@ -17,6 +17,7 @@ TEST_CASE("Dict") {
     SECTION("Dict::loads({})") {
         CHECK(v.get("bool").as<jsoncfg::Bool>()->value() == true);
         CHECK(v.get("dict").as<jsoncfg::Dict>()->get("a").as<jsoncfg::Uint>()->value() == 97);
+        CHECK(v["dict"]["a"].as<jsoncfg::Uint>()->value() == 97);
         CHECK(v.get("float").as<jsoncfg::Dec>()->value() == Approx(5.2).margin(1e-6));
         CHECK(v.get("int").as<jsoncfg::Uint>()->value() == 9);
         CHECK(v.get("list").as<jsoncfg::List>());
@@ -41,6 +42,7 @@ TEST_CASE("Dict") {
         CHECK(jd);
         CHECK(jd->get("bool").as<bool>()->value() == true);
         CHECK(jd->get("dict").as<jsoncfg::Dict>()->get("a").as<int>()->value() == 97);
+        CHECK(jd["dict"]["a"].as<int>()->value() == 97);
         CHECK(jd->get("float").as<float>()->value() == Approx(5.2).margin(1e-6));
         CHECK(jd->get("int").as<int>()->value() == 9);
         CHECK(jd->get("list").as<jsoncfg::List>());

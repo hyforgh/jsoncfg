@@ -89,8 +89,8 @@ public:
         }
         return p;
     }
-    virtual bool is_head() const = 0;
-    virtual void as_head(bool is_head) = 0;
+    virtual bool as_head() const = 0;
+    virtual void as_head(bool is) = 0;
 protected:
     friend class Json;
     virtual void dumps_depth(std::ostream &os
@@ -110,8 +110,8 @@ public:
     typedef DT value_t;
 public:
     virtual ~Value() {}
-    Value(value_t v, bool is_head = false)
-        : _value(std::move(v)), _is_head(is_head) {}
+    Value(value_t v, bool as_head = false)
+        : _value(std::move(v)), _as_head(as_head) {}
     Value &operator = (value_t v) {
         _value = std::move(v);
         return *this;
@@ -125,11 +125,11 @@ public:
     Type type() const override { return JT; }
     value_t &value() { return _value; }
     const value_t &value() const { return _value; }
-    bool is_head() const override { return _is_head; }
-    void as_head(bool is_head) override { _is_head = is_head; }
+    bool as_head() const override { return _as_head; }
+    void as_head(bool is) override { _as_head = is; }
 protected:
     DT _value;
-    char _is_head;
+    char _as_head;
 };
 template <Type JT, typename DT>
 bool operator == (const DT &v, const Value<JT, DT> &obj) {
@@ -191,17 +191,17 @@ public:
     template <typename T>
     Json &operator = (T v);
     const char *loads(const char *psz) override;
-    bool is_head() const override {
+    bool as_head() const override {
         if (_value) {
-            return _value->is_head();
+            return _value->as_head();
         }
-        return _is_head;
+        return _as_head;
     }
-    void as_head(bool is_head) override {
+    void as_head(bool is) override {
         if (_value) {
-            _value->as_head(is_head);
+            _value->as_head(is);
         }
-        _is_head = is_head;
+        _as_head = is;
     }
     template <typename T>
     JsonT<typename __dt_2_jt<T>::type> as() {
@@ -213,11 +213,17 @@ public:
         _value = v;
         return v;
     }
+    template <typename KT>
+    Json &operator [] (KT key) {
+        static_assert(std::is_integral<KT>::value || std::is_convertible<KT, std::string>::value,
+            "Json::operator [] (...) : only integral and string type is supported");
+        return *this;
+    }
 public:
     template <typename T>
     static std::shared_ptr<typename __dt_2_jt<T>::type> as(std::shared_ptr<Interface> v) {
         static_assert(std::is_base_of<Interface, typename __dt_2_jt<T>::type>::value,
-            "Json::as<T>() : not supported type");
+            "Json::as<T>() : only jsoncfg type is supported");
         return nullptr;
     }
     template <typename T>
@@ -239,7 +245,7 @@ class Str final : public Value<Type::STR, std::string> {
 public:
     using Interface::loads;
 public:
-    Str(value_t v = "", bool is_head = false) : Value(std::move(v), is_head) {}
+    Str(value_t v = "", bool as_head = false) : Value(std::move(v), as_head) {}
     Str &operator = (const char *v) {
         _value = v;
         return *this;
@@ -248,7 +254,7 @@ public:
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz, &_is_head);
+        auto p = skip_blank(psz, &_as_head);
         if (*p != '"') {
             return psz;
         }
@@ -286,14 +292,14 @@ class Dec final : public Value<Type::DEC, double> {
 public:
     using Interface::loads;
 public:
-    Dec(value_t v = 0, bool scientific = false, bool is_head = false)
-        : Value(v, is_head), _scientific(scientific) {}
+    Dec(value_t v = 0, bool scientific = false, bool as_head = false)
+        : Value(v, as_head), _scientific(scientific) {}
     const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
         _scientific = false;
-        auto p = skip_blank(psz, &_is_head);
+        auto p = skip_blank(psz, &_as_head);
         char *e;
         _value = std::strtold(p, &e);
         if (e != p) {
@@ -333,23 +339,23 @@ class Int : public Value<Type::INT, __int_value_t> {
 public:
     using Interface::loads;
 public:
-    Int(bool is_head = false)
-            : Value({0}, is_head), _is_signed(0), _base(10) {
+    Int(bool as_head = false)
+            : Value({0}, as_head), _is_signed(0), _base(10) {
     }
-    Int(unsigned long long v, unsigned base = 10, bool is_head = false)
-            : Value({0}, is_head), _is_signed(0) {
+    Int(unsigned long long v, unsigned base = 10, bool as_head = false)
+            : Value({0}, as_head), _is_signed(0) {
         _value.u = v;
         this->base(base);
     }
-    Int(long long v, bool is_head = false)
-            : Value({0}, is_head), _is_signed(1), _base(10) {
+    Int(long long v, bool as_head = false)
+            : Value({0}, as_head), _is_signed(1), _base(10) {
         _value.s = v;
     }
     const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz, &_is_head);
+        auto p = skip_blank(psz, &_as_head);
         if (*p == '-') {
             _is_signed = 1;
             p = skip_blank(p + 1);
@@ -429,8 +435,8 @@ class Uint final : public Int {
 public:
     typedef unsigned long long value_t;
 public:
-    Uint(value_t v = 0, unsigned base = 10, bool is_head = false)
-        : Int(v, base, is_head) {}
+    Uint(value_t v = 0, unsigned base = 10, bool as_head = false)
+        : Int(v, base, as_head) {}
     bool operator == (const value_t &v) const {
         return _value.u == v;
     }
@@ -442,8 +448,8 @@ class Sint final : public Int {
 public:
     typedef long long value_t;
 public:
-    Sint(value_t v = 0, bool is_head = false)
-        : Int(v, is_head) {}
+    Sint(value_t v = 0, bool as_head = false)
+        : Int(v, as_head) {}
     bool operator == (const value_t &v) const {
         return _value.s == v;
     }
@@ -455,12 +461,12 @@ class Bool final : public Value<Type::BOOL, bool> {
 public:
     using Interface::loads;
 public:
-    Bool(value_t v = false, bool is_head = false) : Value(v, is_head) {}
+    Bool(value_t v = false, bool as_head = false) : Value(v, as_head) {}
     const char *loads(const char *psz) override {
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz, &_is_head);
+        auto p = skip_blank(psz, &_as_head);
         if (strncmp(p, "true", 4) == 0) {
             _value = true;
             return p + 4;
@@ -547,21 +553,21 @@ public:
     typedef value_t::reverse_iterator reverse_iterator;
     typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
-    Dict(value_t v = {}, unsigned items_per_line = 1, bool is_head = false)
-        : Value(std::move(v), is_head), _width(items_per_line) {}
+    Dict(value_t v = {}, unsigned items_per_line = 1, bool as_head = false)
+        : Value(std::move(v), as_head), _width(items_per_line) {}
     const char *loads(const char *psz) override {
         _value.clear();
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz, &_is_head);
+        auto p = skip_blank(psz, &_as_head);
         if (*p != '{') {
             return psz;
         }
         _width = 0;
-        char is_head = false;
+        char as_head = false;
         unsigned width = 0;
-        p = skip_blank(p + 1, &is_head);
+        p = skip_blank(p + 1, &as_head);
         while (*p) {
             if (*p == '}') {
                 break;
@@ -571,8 +577,8 @@ public:
             if (e == p) {
                 return psz;
             }
-            if (!k.is_head()) {
-                k.as_head(is_head);
+            if (!k.as_head()) {
+                k.as_head(as_head);
             }
             p = skip_blank(e);
             if (*p != ':') {
@@ -584,15 +590,15 @@ public:
             if (e == p) {
                 return psz;
             }
-            v.as_head(k.is_head());
+            v.as_head(k.as_head());
             ++width;
-            if (v.is_head()) {
+            if (v.as_head()) {
                 if (_width < width) {
                     _width = width;
                 }
                 width = 1;
             }
-            p = skip_blank(e, &is_head);
+            p = skip_blank(e, &as_head);
             if (*p == ',' || *p == '}') {
                 _value[k.value()] = std::move(v);
                 if (*p == '}') {
@@ -644,6 +650,8 @@ public:
     reverse_iterator rend() { return _value.rend(); }
     const_reverse_iterator rbegin() const { return _value.rbegin(); }
     const_reverse_iterator rend() const { return _value.rend(); }
+    unsigned items_per_line() const { return _width; }
+    void items_per_line(unsigned width) { _width = width; }
 protected:
     void dumps_depth(std::ostream &os
             , unsigned indent, bool keep_layout, unsigned depth) const override {
@@ -657,7 +665,7 @@ protected:
             if (indent) {
                 if (keep_layout) {
                     ++width;
-                    if ((is_first && _width) || it.second.is_head() || (_width && width >= _width)) {
+                    if ((is_first && _width) || it.second.as_head() || (_width && width >= _width)) {
                         dumps_head_indent(os, indent, depth + 1);
                         width = 0;
                     }
@@ -708,21 +716,21 @@ public:
     typedef value_t::reverse_iterator reverse_iterator;
     typedef value_t::const_reverse_iterator const_reverse_iterator;
 public:
-    List(value_t v = {}, unsigned items_per_line = 1, bool is_head = false)
-        : Value(std::move(v), is_head), _width(items_per_line) {}
+    List(value_t v = {}, unsigned items_per_line = 1, bool as_head = false)
+        : Value(std::move(v), as_head), _width(items_per_line) {}
     const char *loads(const char *psz) override {
         _value.clear();
         if (!psz) {
             return psz;
         }
-        auto p = skip_blank(psz, &_is_head);
+        auto p = skip_blank(psz, &_as_head);
         if (*p != '[') {
             return psz;
         }
         _width = 0;
-        char is_head = false;
+        char as_head = false;
         unsigned width = 0;
-        p = skip_blank(p + 1, &is_head);
+        p = skip_blank(p + 1, &as_head);
         while (*p) {
             if (*p == ']') {
                 break;
@@ -732,17 +740,17 @@ public:
             if (e == p) {
                 return psz;
             }
-            if (!v.is_head()) {
-                v.as_head(is_head);
+            if (!v.as_head()) {
+                v.as_head(as_head);
             }
             ++width;
-            if (v.is_head()) {
+            if (v.as_head()) {
                 if (_width < width) {
                     _width = width;
                 }
                 width = 1;
             }
-            p = skip_blank(e, &is_head);
+            p = skip_blank(e, &as_head);
             if (*p == ',' || *p == ']') {
                 append(std::move(v));
                 if (*p == ']') {
@@ -768,6 +776,9 @@ public:
     List &insert(int i, Json v) {
         _value.emplace(iterator_at(i), std::move(v));
         return *this;
+    }
+    Json &operator [] (int i) {
+        return *iterator_at(i);
     }
     Json &get(int i) {
         return *iterator_at(i);
@@ -810,6 +821,8 @@ public:
     reverse_iterator rend() { return _value.rend(); }
     const_reverse_iterator rbegin() const { return _value.rbegin(); }
     const_reverse_iterator rend() const { return _value.rend(); }
+    unsigned items_per_line() const { return _width; }
+    void items_per_line(unsigned width) { _width = width; }
 protected:
     void dumps_depth(std::ostream &os
             , unsigned indent, bool keep_layout, unsigned depth) const override {
@@ -823,7 +836,7 @@ protected:
             if (indent) {
                 if (keep_layout) {
                     ++width;
-                    if ((is_first && _width) || it.is_head() || (_width && width >= _width)) {
+                    if ((is_first && _width) || it.as_head() || (_width && width >= _width)) {
                         dumps_head_indent(os, indent, depth + 1);
                         width = 0;
                     }
@@ -885,23 +898,23 @@ public:
     }
 };
 
-#define CASE_JSON_TYPE(JT)                          \
-template <> Json::Json(JT v)                        \
+#define CASE_JSON_TYPE(JT)                        \
+template <> Json::Json(JT v)                      \
     : Value(std::make_shared<JT>(std::move(v))) { \
-}                                                   \
+}                                                 \
 template <> Json::Json(JsonT<typename __dt_2_jt<JT>::type> v) \
-    : Value(v.agent()) {                                    \
+    : Value(v.agent()) {                                      \
 }                                                             \
 template <> Json &Json::operator = (std::remove_const<JT>::type v) { \
     _value = std::make_shared<JT>(std::move(v));                     \
     return *this;                                                    \
-}                                                                                            \
-template <>                                                                                  \
+}                                                                                          \
+template <>                                                                                \
 std::shared_ptr<typename __dt_2_jt<JT>::type> Json::as<JT>(std::shared_ptr<Interface> v) { \
-    if (!v || v->type() != static_cast<Type>(JT::TYPE)) {                                    \
-        return nullptr;                                                                      \
-    }                                                                                        \
-    return std::static_pointer_cast<JT>(v->shared_from_this());                              \
+    if (!v || v->type() != static_cast<Type>(JT::TYPE)) {                                  \
+        return nullptr;                                                                    \
+    }                                                                                      \
+    return std::static_pointer_cast<JT>(v->shared_from_this());                            \
 }
 CASE_JSON_TYPE(Str)
 CASE_JSON_TYPE(Dec)
@@ -920,17 +933,17 @@ std::shared_ptr<typename __dt_2_jt<Int>::type> Json::as<Int>(
     return std::static_pointer_cast<Int>(v->shared_from_this());
 }
 
-#define CASE_DATA_TYPE(JT, DT)                      \
-template <> Json::Json(DT v)                        \
+#define CASE_DATA_TYPE(JT, DT)                    \
+template <> Json::Json(DT v)                      \
     : Value(std::make_shared<JT>(std::move(v))) { \
-}                                                                  \
-template <> struct __dt_2_jt<DT> { typedef JT type; };             \
-template <>                                                        \
+}                                                                \
+template <> struct __dt_2_jt<DT> { typedef JT type; };           \
+template <>                                                      \
 std::shared_ptr<JT> Json::as<DT>(std::shared_ptr<Interface> v) { \
-    if (!v || v->type() != static_cast<Type>(JT::TYPE)) {          \
-        return nullptr;                                            \
-    }                                                              \
-    return std::static_pointer_cast<JT>(v->shared_from_this());    \
+    if (!v || v->type() != static_cast<Type>(JT::TYPE)) {        \
+        return nullptr;                                          \
+    }                                                            \
+    return std::static_pointer_cast<JT>(v->shared_from_this());  \
 }
 CASE_DATA_TYPE(Str, std::string)
 CASE_DATA_TYPE(Str, const char *)
@@ -1113,6 +1126,15 @@ std::shared_ptr<typename __dt_2_jt<DT>::type> Json::to(std::shared_ptr<Interface
     }
     return as<JT>(v);
 }
+
+#define CASE_JSON_ITEM_KEY(CT, KT)                 \
+template <> Json &Json::operator []<KT> (KT key) { \
+    return as<CT>()[key];                          \
+}
+CASE_JSON_ITEM_KEY(Dict, const std::string &)
+CASE_JSON_ITEM_KEY(Dict, const char *)
+CASE_JSON_ITEM_KEY(List, int)
+#undef CASE_JSON_ITEM_KEY
 
 } // jsoncfg
 

@@ -17,6 +17,9 @@ TEST_CASE("List") {
         CHECK(iters[3]->as<jsoncfg::Dict>()->get("world").as<int>()->value() == 8);
         CHECK(iters[3]->as<jsoncfg::Dict>()->get("json").as<float>()->value() == Approx(9.1).margin(1e-6));
         CHECK(iters[4]->as<jsoncfg::List>()->vector<int>(0) == std::vector<int> {4, 5, 6});
+        CHECK(v[3]["world"].as<int>()->value() == 8);
+        CHECK(v[3]["json"].as<float>()->value() == Approx(9.1).margin(1e-6));
+        CHECK(v[4].as<jsoncfg::List>()->vector<int>(0) == std::vector<int> {4, 5, 6});
         CHECK(v.vector<std::string>("") == std::vector<std::string> {"1.2", "5", "hello", "{\"world\":8,\"json\":9.1}", "[4,5,6]"});
         CHECK(v.vector<int>(-1) == std::vector<int> {1, 5, -1, -1, -1});
         CHECK(v.vector<float>(0) == std::vector<float> {1.2, 5, 0, 0, 0});

@@ -24,7 +24,8 @@ int main(int argc, char *argv[]) {
     jsoncfg::Json root_d;
     root_d.loads(root_e.dumps(4, true));
     std::cout << root_d.dumps() << std::endl;
-    root_d.as<jsoncfg::Dict>()["list"].as<jsoncfg::List>()[-1].as<jsoncfg::Int>()->base(10);
+    root_d.as<jsoncfg::Dict>()->get("list").as<jsoncfg::List>()[-1].as<jsoncfg::Int>()->base(10);
+    root_d["list"][3].as<jsoncfg::Uint>() = 512;
     std::cout << root_d.dumps(4, true) << std::endl;
     return 0;
 }
